@@ -11,7 +11,7 @@ const customIcon = new L.Icon({
   iconAnchor: [12, 41],
 });
 
-const socket = io("https://onrender.com"); // Kendi linkini yaz
+const socket = io("https://livegps-location.onrender.com/"); // Kendi linkini yaz
 
 export default function LiveMap() {
   const [locations, setLocations] = useState({});
