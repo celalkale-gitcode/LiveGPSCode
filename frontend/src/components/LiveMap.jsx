@@ -47,7 +47,7 @@ export default function LiveMap() {
     <MapContainer center={[41.0082, 28.9784]} zoom={13} style={{ height: "100vh" }}>
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       {Object.entries(locations).map(([id, pos]) => (
-        <Marker key={id} position={pos} icon={customIcon}>
+        <Marker key={id} position={pos}>
           <Popup>{id === myId ? "Siz" : `Cihaz: ${id}`}</Popup>
         </Marker>
       ))}
