@@ -4,12 +4,15 @@ import { io } from 'socket.io-client';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
-// İkonların düzgün görünmesi için bu bloğu ekleyin
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cloudflare.com',
+// 1. Önce ikonu manuel oluştur
+const mapIcon = new L.Icon({
   iconUrl: 'https://cloudflare.com',
+  iconRetinaUrl: 'https://cloudflare.com',
   shadowUrl: 'https://cloudflare.com',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
 });
 
 const socket = io("https://livegps-location.onrender.com/"); // Kendi linkini yaz
@@ -47,7 +50,7 @@ export default function LiveMap() {
     <MapContainer center={[41.0082, 28.9784]} zoom={13} style={{ height: "100vh" }}>
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       {Object.entries(locations).map(([id, pos]) => (
-        <Marker key={id} position={pos}>
+        <Marker key={id} position={pos} icon={mapIcon}>
           <Popup>{id === myId ? "Siz" : `Cihaz: ${id}`}</Popup>
         </Marker>
       ))}
