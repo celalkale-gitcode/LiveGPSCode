@@ -3,6 +3,15 @@ import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import { io } from 'socket.io-client';
 import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+// İkonların düzgün görünmesi için bu bloğu ekleyin
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cloudflare.com',
+  iconUrl: 'https://cloudflare.com',
+  shadowUrl: 'https://cloudflare.com',
+});
 
 // Marker simgesi hatasını düzeltmek için zorunlu ayar
 const customIcon = new L.Icon({
