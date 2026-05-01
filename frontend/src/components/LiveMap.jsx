@@ -13,13 +13,6 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cloudflare.com',
 });
 
-// Marker simgesi hatasını düzeltmek için zorunlu ayar
-const customIcon = new L.Icon({
-  iconUrl: 'https://cloudflare.com',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
-
 const socket = io("https://livegps-location.onrender.com/"); // Kendi linkini yaz
 
 export default function LiveMap() {
