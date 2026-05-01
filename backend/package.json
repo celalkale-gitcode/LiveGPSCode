@@ -1,7 +1,7 @@
 {
-  "name": "erp-backend",
+  "name": "LiveGPS_Location",
   "version": "0.0.1",
-  "description": "NestJS ERP Backend with Prisma and Socket.io",
+  "description": "NestJS LiveGPS_Location Backend with Prisma and Socket.io",
   "author": "",
   "private": true,
   "license": "UNLICENSED",
