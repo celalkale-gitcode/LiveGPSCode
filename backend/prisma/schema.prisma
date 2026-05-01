@@ -1,1 +1,23 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model StokHareketleri {
+  id            Int       @id @default(autoincrement())
+  urun_id       Int?
+  tip           String?
+  miktar        Int?
+  latitude      Float?
+  longitude     Float?
+  tarih         DateTime? @default(now())
+
+  @@map("stok_hareketleri")
+}
+
+// Diğer modellerine de @@map eklemeyi unutma (Urunler, Kategoriler vb.)
 
