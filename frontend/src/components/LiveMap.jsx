@@ -15,7 +15,7 @@ const heartIcon = new L.Icon({
 });
 
 // Render backend URL'niz
-const socket = io("https://onrender.com");
+const socket = io("https://livegps-location.onrender.com/");
 
 export default function LiveMap() {
   const [locations, setLocations] = useState({});
