@@ -5,29 +5,38 @@ import { PrismaService } from '../common/prisma.service';
 export class MapService {
   constructor(private prisma: PrismaService) {}
 
-  // Canlı gelen konumu veritabanına (Supabase) kalıcı olarak kaydetmek için
+  /**
+   * Manuel olarak butona basıldığında konumu kaydeder.
+   */
   async saveLocation(data: { id: string; lat: number; lng: number }) {
     return this.prisma.stokHareketleri.create({
       data: {
-        tip: 'CANLI_TAKIP',
+        tip: 'MANUEL_KAYIT', // Artık sadece butona basınca kayıt yaptığımız için tipi güncelledik
         latitude: data.lat,
         longitude: data.lng,
         tarih: new Date(),
-        // Not: Şemanızda 'id' varsa buraya 'urun_id' gibi bir eşleştirme yapabilirsiniz
       },
     });
   }
 
-  // Harita ilk açıldığında son konumları veritabanından çekmek için
+  /**
+   * Frontend'deki LocationList için kayıt geçmişini getirir.
+   */
   async getPastLocations() {
     return this.prisma.stokHareketleri.findMany({
-      take: 100, // Son 100 hareketi getir
-      orderBy: { tarih: 'desc' },
-      where: {
-        latitude: { not: null },
-        longitude: { not: null },
+      take: 50, // Performans için son 50 kayıt yeterlidir
+      orderBy: { 
+        tarih: 'desc' // En yeni kayıt en üstte
+      },
+      select: {
+        id: true,
+        latitude: true,
+        longitude: true,
+        tarih: true,
+        tip: true,
       },
     });
   }
 }
+
 
