@@ -44,7 +44,7 @@ export default function LiveMap() {
   const [isGpsActive, setIsGpsActive] = useState(false);
 
   const watchIdRef = useRef(null);
-  const lastSignalRef = useRef(0); // 🕒 Son sinyal zamanını milisaniye olarak tutar
+  const lastSignalRef = useRef(0);
 
   const fetchHistory = async () => {
     setListLoading(true);
@@ -64,7 +64,7 @@ export default function LiveMap() {
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         const { latitude, longitude } = pos.coords;
-        lastSignalRef.current = Date.now(); // ✅ Kalp atışı: Sinyal geldi!
+        lastSignalRef.current = Date.now(); // ✅ Kalp atışı güncellendi
         setIsGpsActive(true);
         setLoading(false);
         
@@ -77,11 +77,7 @@ export default function LiveMap() {
         setIsGpsActive(false);
         setLocations(prev => { const n = { ...prev }; delete n[myId]; return n; });
       },
-      { 
-        enableHighAccuracy: true, 
-        timeout: 5000, 
-        maximumAge: 0 
-      }
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
     );
   }, [myId, myFirstCoords]);
 
@@ -91,17 +87,17 @@ export default function LiveMap() {
 
     const loaderTimeout = setTimeout(() => setLoading(false), 2500);
 
-    // 🔄 GÜVENLİK DÖNGÜSÜ: Hem uyandırır hem de "hayalet" sinyalleri öldürür
+    // 🔄 AGRESİF DÖNGÜ: Hem uykudan uyandırır hem de kesilen sinyali fark eder
     const intervalId = setInterval(() => {
       const now = Date.now();
       
-      // 1. KONTROL: Eğer GPS aktif görünüyorsa ama 6 saniyedir taze veri gelmediyse PASİFE çek
+      // 1. KONTROL: Eğer 6 saniyedir taze veri gelmediyse GPS kapalıdır (Real-time Tepki)
       if (isGpsActive && (now - lastSignalRef.current > 6000)) {
         setIsGpsActive(false);
         setLocations(prev => { const n = { ...prev }; delete n[myId]; return n; });
       }
 
-      // 2. KONTROL: Eğer GPS kapalıysa tekrar uyandırmayı dene
+      // 2. KONTROL: Eğer GPS pasifse tekrar uyandırmayı dene
       if (!isGpsActive) {
         startTracking();
       }
@@ -120,7 +116,10 @@ export default function LiveMap() {
   }, [startTracking, isGpsActive, myId]);
 
   const saveCurrentLocation = async () => {
-    if (!isGpsActive) return;
+    if (!isGpsActive) {
+      Swal.fire({ icon: 'error', title: 'GPS Sinyali Yok', text: 'Konum kapalıyken kayıt yapılamaz.' });
+      return;
+    }
     const myPos = locations[myId];
     if (!myPos) return;
 
@@ -139,15 +138,12 @@ export default function LiveMap() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%' }}>
-      
       {loading && <Loader message="Sistem Hazırlanıyor..." fullScreen={true} />}
 
       <div style={{ height: '60%', width: '100%', position: 'relative' }}>
         <MapContainer center={[41.0082, 28.9784]} zoom={13} style={{ height: '100%' }}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          
           {myFirstCoords && <RecenterMap coords={myFirstCoords} />}
-
           {Object.entries(locations).map(([id, pos]) => (
             <Marker key={id} position={pos} icon={customSVGIcon}>
               <Popup>
