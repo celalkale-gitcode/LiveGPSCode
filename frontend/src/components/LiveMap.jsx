@@ -15,7 +15,8 @@ const customSVGIcon = L.divIcon({
   iconAnchor: [15, 30],
 });
 
-const BACKEND_URL = "https://onrender.com";
+// ✅ BACKEND URL DÜZELTİLDİ
+const BACKEND_URL = "https://livegps-location.onrender.com";
 const socket = io(BACKEND_URL);
 
 const Toast = Swal.mixin({
@@ -43,7 +44,6 @@ export default function LiveMap() {
   const [myFirstCoords, setMyFirstCoords] = useState(null);
   const [isGpsActive, setIsGpsActive] = useState(false);
 
-  // GPS durumunu interval içinde güncel tutmak için ref kullanıyoruz
   const gpsStatusRef = useRef(false);
 
   const fetchHistory = async () => {
@@ -52,13 +52,13 @@ export default function LiveMap() {
       const res = await fetch(`${BACKEND_URL}/map/history`);
       const data = await res.json();
       setHistory(data);
-    } catch (err) { console.error(err); } 
+    } catch (err) { console.error("Geçmiş hatası:", err); } 
     finally { setListLoading(false); }
   };
 
   const saveCurrentLocation = async () => {
     if (!isGpsActive) {
-      Swal.fire({ icon: 'error', title: 'GPS Kapalı', text: 'Lütfen konumu açın.' });
+      Swal.fire({ icon: 'error', title: 'GPS Kapalı', text: 'Konum servisleriniz kapalıyken kayıt yapılamaz.' });
       return;
     }
     const myPos = locations[myId];
@@ -71,10 +71,10 @@ export default function LiveMap() {
         body: JSON.stringify({ id: myId, lat: myPos[0], lng: myPos[1] }),
       });
       if (response.ok) {
-        Toast.fire({ icon: 'success', title: 'Kaydedildi!' });
+        Toast.fire({ icon: 'success', title: 'Konum kaydedildi!' });
         fetchHistory();
       }
-    } catch (error) { console.error(error); }
+    } catch (error) { console.error("Bağlantı hatası:", error); }
   };
 
   const startTracking = useCallback(() => {
@@ -83,8 +83,11 @@ export default function LiveMap() {
         const { latitude, longitude } = pos.coords;
         setIsGpsActive(true);
         gpsStatusRef.current = true;
+        setLoading(false); // ✅ İlk başarılı sinyalde loader'ı kapat
+
         setLocations(prev => ({ ...prev, [myId]: [latitude, longitude] }));
         socket.emit('konumGonder', { id: myId, lat: latitude, lng: longitude });
+        
         if (!myFirstCoords) setMyFirstCoords([latitude, longitude]);
       },
       () => {
@@ -100,14 +103,20 @@ export default function LiveMap() {
     fetchHistory();
     let watchId = startTracking();
 
-    // 🌀 Loader'ı 2 saniye sonra her halükarda kapat (Harita gelsin)
-    const loaderTimeout = setTimeout(() => setLoading(false), 2000);
+    // 🌀 Loader'ı her durumda 2.5 saniye sonra kapat (Harita görünsün)
+    const loaderTimeout = setTimeout(() => setLoading(false), 2500);
 
-    // 🔄 AGRESİF KONTROL: Konum açıldığında butonu anında mavi yapar
+    // 🔄 AGRESİF RE-CHECK: Konum kapalıyken her 2 saniyede bir dürt
     const intervalId = setInterval(() => {
       if (!gpsStatusRef.current) {
-        navigator.geolocation.clearWatch(watchId);
-        watchId = startTracking();
+        navigator.geolocation.getCurrentPosition(
+          () => {
+            navigator.geolocation.clearWatch(watchId);
+            watchId = startTracking();
+          },
+          null,
+          { enableHighAccuracy: true, timeout: 2000 }
+        );
       }
     }, 2000);
 
@@ -126,13 +135,14 @@ export default function LiveMap() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%' }}>
       
-      {/* Sadece ilk 2 saniye veya veri beklerken görünür */}
-      {loading && <Loader message="Sistem Hazırlanıyor..." fullScreen={true} />}
+      {loading && <Loader message="GPS Bağlantısı Kuruluyor..." fullScreen={true} />}
 
       <div style={{ height: '60%', width: '100%', position: 'relative' }}>
-        <MapContainer center={[41.0082, 28.9784]} zoom={13} style={{ height: '100%' }}>
+        <MapContainer center={[41.0082, 28.9784]} zoom={13} style={{ height: '100%', width: '100%' }}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          
           {myFirstCoords && <RecenterMap coords={myFirstCoords} />}
+
           {Object.entries(locations).map(([id, pos]) => (
             <Marker key={id} position={pos} icon={customSVGIcon}>
               <Popup><strong>{id === myId ? "Siz" : id}</strong></Popup>
