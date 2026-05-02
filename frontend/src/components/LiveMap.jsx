@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import React, { useEffect, useState, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { io } from 'socket.io-client';
 import 'leaflet/dist/leaflet.css';
@@ -12,22 +12,36 @@ const customSVGIcon = L.divIcon({
   iconAnchor: [15, 30],
 });
 
-const socket = io("https://onrender.com");
+// ✅ ADRESLER DÜZELTİLDİ
+const BACKEND_URL = "https://livegps-location.onrender.com";
+const socket = io(BACKEND_URL);
+
+// 📍 Haritayı merkeze alan yardımcı bileşen
+function RecenterMap({ coords }) {
+  const map = useMap();
+  useEffect(() => {
+    if (coords) {
+      map.flyTo(coords, 16); // Konum gelince haritayı oraya uçurur
+    }
+  }, [coords, map]);
+  return null;
+}
 
 export default function LiveMap() {
   const [locations, setLocations] = useState({});
   const [myId] = useState("Cihaz_" + Math.random().toString(36).substr(2, 4));
-  const [loading, setLoading] = useState(true); // 🔄 Preloader durumu
+  const [loading, setLoading] = useState(true);
+  const [myFirstCoords, setMyFirstCoords] = useState(null); // İlk odaklama için
 
   const saveCurrentLocation = async () => {
     const myCurrentPos = locations[myId]; 
     if (!myCurrentPos) {
-      alert("⚠️ Konum henüz alınamadı.");
+      alert("⚠️ Konum verisi henüz gelmedi, lütfen bekleyin.");
       return;
     }
 
     try {
-      const response = await fetch("https://onrender.com/map/save", {
+      const response = await fetch(`${BACKEND_URL}/map/save`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -40,23 +54,30 @@ export default function LiveMap() {
       if (response.ok) alert("✅ Konum başarıyla kaydedildi!");
       else alert("❌ Sunucu hatası: " + response.status);
     } catch (error) {
-      alert("❌ Bağlantı hatası!");
+      alert("❌ Bağlantı hatası: Backend çalışmıyor olabilir.");
     }
   };
 
   useEffect(() => {
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
-        socket.emit('konumGonder', {
-          id: myId,
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude
-        });
-        setLoading(false); // ✅ İlk konum geldiğinde yükleme ekranını kapat
+        const { latitude, longitude } = pos.coords;
+        
+        // Sunucuya gönder
+        socket.emit('konumGonder', { id: myId, lat: latitude, lng: longitude });
+        
+        // Yerel state'i güncelle (İkonun görünmesi için şart!)
+        setLocations(prev => ({ ...prev, [myId]: [latitude, longitude] }));
+        
+        if (loading) {
+          setMyFirstCoords([latitude, longitude]);
+          setLoading(false);
+        }
       },
       (err) => {
-        console.error(err);
-        setLoading(false); // Hata gelse bile ekranı aç (kullanıcı görsün)
+        console.error("GPS Hatası:", err);
+        if(err.code === 1) alert("Lütfen tarayıcıdan konum izni verin!");
+        setLoading(false);
       },
       { enableHighAccuracy: true, distanceFilter: 2 }
     );
@@ -69,12 +90,11 @@ export default function LiveMap() {
       navigator.geolocation.clearWatch(watchId);
       socket.off('konumAl');
     };
-  }, [myId]);
+  }, [myId, loading]);
 
   return (
     <div style={{ height: "100vh", width: "100%", position: "relative", backgroundColor: '#f3f4f6' }}>
       
-      {/* 🌀 PRELOADER EKRANI */}
       {loading && (
         <div style={{
           position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
@@ -86,16 +106,19 @@ export default function LiveMap() {
             borderTop: '5px solid #3B82F6', borderRadius: '50%',
             animation: 'spin 1s linear infinite'
           }} />
-          <p style={{ marginTop: '20px', fontFamily: 'sans-serif', color: '#4b5563', fontWeight: '500' }}>
-            GPS Bağlantısı Kuruluyor...
+          <p style={{ marginTop: '20px', fontFamily: 'sans-serif', color: '#4b5563' }}>
+            GPS Bekleniyor... (İzin vermeyi unutmayın)
           </p>
           <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
         </div>
       )}
 
-      {/* HARİTA */}
       <MapContainer center={[41.0082, 28.9784]} zoom={13} style={{ height: "100%", width: "100%" }}>
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        
+        {/* İlk konum gelince haritayı oraya odakla */}
+        {myFirstCoords && <RecenterMap coords={myFirstCoords} />}
+
         {Object.entries(locations).map(([id, position]) => (
          <Marker key={id} position={position} icon={customSVGIcon}>
            <Popup>{id === myId ? "Siz" : `Cihaz: ${id}`}</Popup>
@@ -103,14 +126,14 @@ export default function LiveMap() {
         ))}
       </MapContainer>
 
-      {/* 💾 KAYDET BUTONU */}
       <button 
         onClick={saveCurrentLocation}
         style={{
-          position: 'absolute', bottom: '80px', right: '20px', zIndex: 1000,
-          padding: '14px 28px', backgroundColor: '#3B82F6', color: 'white',
-          border: 'none', borderRadius: '12px', fontWeight: 'bold', fontSize: '16px',
-          boxShadow: '0 6px 20px rgba(0,0,0,0.4)', cursor: 'pointer'
+          position: 'absolute', bottom: '100px', right: '20px', zIndex: 1000,
+          padding: '16px 24px', backgroundColor: '#3B82F6', color: 'white',
+          border: 'none', borderRadius: '50px', fontWeight: 'bold', fontSize: '16px',
+          boxShadow: '0 8px 25px rgba(0,0,0,0.3)', cursor: 'pointer',
+          WebkitAppearance: 'none' // Android buton stili için
         }}
       >
         💾 Konumu Kaydet
@@ -118,5 +141,6 @@ export default function LiveMap() {
     </div>
   );
 }
+
 
 
