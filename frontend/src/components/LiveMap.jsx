@@ -15,7 +15,6 @@ const customSVGIcon = L.divIcon({
   iconAnchor: [15, 30],
 });
 
-// ✅ BACKEND URL DÜZELTİLDİ
 const BACKEND_URL = "https://livegps-location.onrender.com";
 const socket = io(BACKEND_URL);
 
@@ -44,7 +43,8 @@ export default function LiveMap() {
   const [myFirstCoords, setMyFirstCoords] = useState(null);
   const [isGpsActive, setIsGpsActive] = useState(false);
 
-  const gpsStatusRef = useRef(false);
+  // Çakışmayı önlemek için takip ID'sini ref olarak tutuyoruz
+  const watchIdRef = useRef(null);
 
   const fetchHistory = async () => {
     setListLoading(true);
@@ -55,6 +55,61 @@ export default function LiveMap() {
     } catch (err) { console.error("Geçmiş hatası:", err); } 
     finally { setListLoading(false); }
   };
+
+  // GPS takibini güvenli bir şekilde başlatan fonksiyon
+  const startTracking = useCallback(() => {
+    if (watchIdRef.current) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+    }
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setIsGpsActive(true);
+        setLoading(false);
+        
+        setLocations(prev => ({ ...prev, [myId]: [latitude, longitude] }));
+        socket.emit('konumGonder', { id: myId, lat: latitude, lng: longitude });
+        
+        if (!myFirstCoords) setMyFirstCoords([latitude, longitude]);
+      },
+      () => {
+        setIsGpsActive(false);
+        // Konum kapandığında sadece ikonu sil, loader'ı tekrar açma
+        setLocations(prev => { const n = { ...prev }; delete n[myId]; return n; });
+      },
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+    );
+  }, [myId, myFirstCoords]);
+
+  useEffect(() => {
+    fetchHistory();
+    startTracking();
+
+    // Harita ekranını her durumda 2.5 saniye sonra aç
+    const loaderTimeout = setTimeout(() => setLoading(false), 2500);
+
+    // 🔄 AKILLI RE-CHECK: Sadece GPS kapalıysa her 3 saniyede bir uyandırmayı dene
+    const intervalId = setInterval(() => {
+      setIsGpsActive(currentStatus => {
+        if (!currentStatus) {
+          startTracking(); // Sadece kapalıysa tekrar dene
+        }
+        return currentStatus;
+      });
+    }, 3000);
+
+    socket.on('konumAl', (data) => {
+      setLocations(prev => ({ ...prev, [data.id]: [data.lat, data.lng] }));
+    });
+
+    return () => {
+      if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
+      clearInterval(intervalId);
+      clearTimeout(loaderTimeout);
+      socket.off('konumAl');
+    };
+  }, [startTracking]);
 
   const saveCurrentLocation = async () => {
     if (!isGpsActive) {
@@ -77,65 +132,10 @@ export default function LiveMap() {
     } catch (error) { console.error("Bağlantı hatası:", error); }
   };
 
-  const startTracking = useCallback(() => {
-    return navigator.geolocation.watchPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        setIsGpsActive(true);
-        gpsStatusRef.current = true;
-        setLoading(false); // ✅ İlk başarılı sinyalde loader'ı kapat
-
-        setLocations(prev => ({ ...prev, [myId]: [latitude, longitude] }));
-        socket.emit('konumGonder', { id: myId, lat: latitude, lng: longitude });
-        
-        if (!myFirstCoords) setMyFirstCoords([latitude, longitude]);
-      },
-      () => {
-        setIsGpsActive(false);
-        gpsStatusRef.current = false;
-        setLocations(prev => { const n = { ...prev }; delete n[myId]; return n; });
-      },
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-    );
-  }, [myId, myFirstCoords]);
-
-  useEffect(() => {
-    fetchHistory();
-    let watchId = startTracking();
-
-    // 🌀 Loader'ı her durumda 2.5 saniye sonra kapat (Harita görünsün)
-    const loaderTimeout = setTimeout(() => setLoading(false), 2500);
-
-    // 🔄 AGRESİF RE-CHECK: Konum kapalıyken her 2 saniyede bir dürt
-    const intervalId = setInterval(() => {
-      if (!gpsStatusRef.current) {
-        navigator.geolocation.getCurrentPosition(
-          () => {
-            navigator.geolocation.clearWatch(watchId);
-            watchId = startTracking();
-          },
-          null,
-          { enableHighAccuracy: true, timeout: 2000 }
-        );
-      }
-    }, 2000);
-
-    socket.on('konumAl', (data) => {
-      setLocations(prev => ({ ...prev, [data.id]: [data.lat, data.lng] }));
-    });
-
-    return () => {
-      navigator.geolocation.clearWatch(watchId);
-      clearInterval(intervalId);
-      clearTimeout(loaderTimeout);
-      socket.off('konumAl');
-    };
-  }, [myId, startTracking]);
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%' }}>
       
-      {loading && <Loader message="GPS Bağlantısı Kuruluyor..." fullScreen={true} />}
+      {loading && <Loader message="Sistem Hazırlanıyor..." fullScreen={true} />}
 
       <div style={{ height: '60%', width: '100%', position: 'relative' }}>
         <MapContainer center={[41.0082, 28.9784]} zoom={13} style={{ height: '100%', width: '100%' }}>
@@ -160,9 +160,9 @@ export default function LiveMap() {
             color: 'white', border: 'none', borderRadius: '50px', 
             cursor: isGpsActive ? 'pointer' : 'not-allowed', 
             fontWeight: 'bold', boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
-            transition: 'all 0.3s ease'
+            transition: 'all 0.3s ease-in-out'
           }}>
-          {isGpsActive ? '💾 Konumu Kaydet' : '❌ GPS Kapalı'}
+          {isGpsActive ? '💾 Konumu Kaydet' : '❌ GPS Bekleniyor...'}
         </button>
       </div>
 
