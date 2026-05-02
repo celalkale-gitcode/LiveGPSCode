@@ -15,7 +15,7 @@ const customSVGIcon = L.divIcon({
   iconAnchor: [15, 30],
 });
 
-const BACKEND_URL = "https://livegps-location.onrender.com";
+const BACKEND_URL = "https://onrender.com";
 const socket = io(BACKEND_URL);
 
 const Toast = Swal.mixin({
@@ -54,7 +54,6 @@ export default function LiveMap() {
   };
 
   const saveCurrentLocation = async () => {
-    // 🛑 REAL-TIME KONTROL: GPS kapalıysa butona basılsa dahi işlem yapmaz
     if (!isGpsActive) {
       Swal.fire({
         icon: 'error',
@@ -85,8 +84,6 @@ export default function LiveMap() {
       if (response.ok) {
         Toast.fire({ icon: 'success', title: 'Konum kaydedildi!' });
         fetchHistory();
-      } else {
-        Swal.fire({ icon: 'error', title: 'Hata!', text: 'Kayıt başarısız.' });
       }
     } catch (error) {
       Swal.fire({ icon: 'error', title: 'Bağlantı Hatası', text: 'Sunucuya ulaşılamıyor.' });
@@ -95,36 +92,44 @@ export default function LiveMap() {
 
   useEffect(() => {
     fetchHistory();
-    const watchId = navigator.geolocation.watchPosition((pos) => {
-      // ✅ CANLI YAYIN: GPS'den veri geldiği an buton Mavi olur
-      setIsGpsActive(true);
-      
-      const { latitude, longitude } = pos.coords;
-      socket.emit('konumGonder', { id: myId, lat: latitude, lng: longitude });
-      setLocations(prev => ({ ...prev, [myId]: [latitude, longitude] }));
-      
-      if (loading) {
-        setMyFirstCoords([latitude, longitude]);
-        setLoading(false);
-      }
-    }, (err) => {
-      // 🛑 REAL-TIME DURDURMA: GPS kapatıldığı saniye buton Griye döner
-      setIsGpsActive(false);
-      setLoading(false);
-      
-      // Haritadaki hayalet ikonu temizle
-      setLocations(prev => {
-        const newLocs = { ...prev };
-        delete newLocs[myId];
-        return newLocs;
-      });
+    let watchId;
 
-      console.warn("GPS Durumu Değişti:", err.message);
-    }, { 
-      enableHighAccuracy: true,
-      maximumAge: 0,
-      timeout: 4000 // ❗ 4 saniye sinyal gelmezse GPS'i kapalı say (Real-time tepki için)
-    });
+    // 🚀 GPS TAKİBİNİ BAŞLATAN VE YENİLEYEN FONKSİYON
+    const startTracking = () => {
+      if (watchId) navigator.geolocation.clearWatch(watchId);
+
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          setIsGpsActive(true); // ✅ KONUM AÇILDI: Butonu maviye döndür
+          setLoading(false);
+          
+          socket.emit('konumGonder', { id: myId, lat: latitude, lng: longitude });
+          setLocations(prev => ({ ...prev, [myId]: [latitude, longitude] }));
+          
+          if (!myFirstCoords) setMyFirstCoords([latitude, longitude]);
+        },
+        (err) => {
+          setIsGpsActive(false); // 🛑 KONUM KAPALI: Butonu griye döndür
+          setLoading(false);
+          setLocations(prev => {
+            const newLocs = { ...prev };
+            delete newLocs[myId];
+            return newLocs;
+          });
+        },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+      );
+    };
+
+    startTracking();
+
+    // 🔄 RE-CHECK DÖNGÜSÜ: Konum kapalıysa her 3 saniyede bir düzeldi mi diye bakar
+    const intervalId = setInterval(() => {
+      if (!isGpsActive) {
+        startTracking();
+      }
+    }, 3000);
 
     socket.on('konumAl', (data) => {
       setLocations(prev => ({ ...prev, [data.id]: [data.lat, data.lng] }));
@@ -132,13 +137,14 @@ export default function LiveMap() {
 
     return () => {
       navigator.geolocation.clearWatch(watchId);
+      clearInterval(intervalId);
       socket.off('konumAl');
     };
-  }, [myId, loading]);
+  }, [myId, isGpsActive]); // isGpsActive değiştikçe döngüyü kontrol eder
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%' }}>
-      {loading && <Loader message="GPS Bekleniyor..." fullScreen={true} />}
+      {loading && <Loader message="GPS Bağlantısı Bekleniyor..." fullScreen={true} />}
 
       <div style={{ height: '60%', width: '100%', position: 'relative' }}>
         <MapContainer center={[41.0082, 28.9784]} zoom={13} style={{ height: '100%' }}>
@@ -154,21 +160,20 @@ export default function LiveMap() {
           ))}
         </MapContainer>
         
-        {/* 🔘 REAL-TIME DİNAMİK BUTON */}
         <button 
           onClick={saveCurrentLocation} 
-          disabled={!isGpsActive} // ❗ GPS kapalıyken tıklamayı tamamen kilitler
+          disabled={!isGpsActive}
           style={{ 
             position: 'absolute', bottom: '20px', right: '20px', zIndex: 1000, 
             padding: '14px 24px', 
-            backgroundColor: isGpsActive ? '#3B82F6' : '#6b7280', // Renk anında değişir
+            backgroundColor: isGpsActive ? '#3B82F6' : '#6b7280', 
             color: 'white', 
             border: 'none', borderRadius: '50px', 
             cursor: isGpsActive ? 'pointer' : 'not-allowed', 
             fontWeight: 'bold', boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
-            transition: 'all 0.4s ease-in-out' // Yumuşak geçiş efekti
+            transition: 'all 0.4s ease-in-out'
           }}>
-          {isGpsActive ? '💾 Konumu Kaydet' : '❌ GPS Kapalı'}
+          {isGpsActive ? '💾 Konumu Kaydet' : '❌ GPS Bekleniyor...'}
         </button>
       </div>
 
