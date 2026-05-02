@@ -7,7 +7,7 @@ import 'leaflet/dist/leaflet.css';
 
 // ... (customSVGIcon tanımı aynı kalsın)
 
-const BACKEND_URL = "https://onrender.com";
+const BACKEND_URL = "https://livegps-location.onrender.com";
 const socket = io(BACKEND_URL);
 
 export default function LiveMap() {
