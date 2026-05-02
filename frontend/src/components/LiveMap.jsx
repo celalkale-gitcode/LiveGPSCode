@@ -43,7 +43,6 @@ export default function LiveMap() {
   const [myFirstCoords, setMyFirstCoords] = useState(null);
   const [isGpsActive, setIsGpsActive] = useState(false);
 
-  // Çakışmayı önlemek için takip ID'sini ref olarak tutuyoruz
   const watchIdRef = useRef(null);
 
   const fetchHistory = async () => {
@@ -56,7 +55,6 @@ export default function LiveMap() {
     finally { setListLoading(false); }
   };
 
-  // GPS takibini güvenli bir şekilde başlatan fonksiyon
   const startTracking = useCallback(() => {
     if (watchIdRef.current) {
       navigator.geolocation.clearWatch(watchIdRef.current);
@@ -65,7 +63,7 @@ export default function LiveMap() {
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         const { latitude, longitude } = pos.coords;
-        setIsGpsActive(true);
+        setIsGpsActive(true); // ✅ Sinyal geldi, aktif yap
         setLoading(false);
         
         setLocations(prev => ({ ...prev, [myId]: [latitude, longitude] }));
@@ -74,11 +72,14 @@ export default function LiveMap() {
         if (!myFirstCoords) setMyFirstCoords([latitude, longitude]);
       },
       () => {
-        setIsGpsActive(false);
-        // Konum kapandığında sadece ikonu sil, loader'ı tekrar açma
+        setIsGpsActive(false); // 🛑 Sinyal koptu, pasif yap
         setLocations(prev => { const n = { ...prev }; delete n[myId]; return n; });
       },
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      { 
+        enableHighAccuracy: true, 
+        timeout: 3000, // ❗ 3 saniye veri gelmezse hata ver (Butonu griye çek)
+        maximumAge: 0 
+      }
     );
   }, [myId, myFirstCoords]);
 
@@ -86,14 +87,14 @@ export default function LiveMap() {
     fetchHistory();
     startTracking();
 
-    // Harita ekranını her durumda 2.5 saniye sonra aç
     const loaderTimeout = setTimeout(() => setLoading(false), 2500);
 
-    // 🔄 AKILLI RE-CHECK: Sadece GPS kapalıysa her 3 saniyede bir uyandırmayı dene
+    // 🔄 REAL-TIME KONTROL: Konum kapalıysa sürekli uyandırmayı dene
     const intervalId = setInterval(() => {
+      // isGpsActive state'ini en güncel haliyle kontrol edip gerekirse uyandırır
       setIsGpsActive(currentStatus => {
         if (!currentStatus) {
-          startTracking(); // Sadece kapalıysa tekrar dene
+          startTracking();
         }
         return currentStatus;
       });
@@ -112,10 +113,7 @@ export default function LiveMap() {
   }, [startTracking]);
 
   const saveCurrentLocation = async () => {
-    if (!isGpsActive) {
-      Swal.fire({ icon: 'error', title: 'GPS Kapalı', text: 'Konum servisleriniz kapalıyken kayıt yapılamaz.' });
-      return;
-    }
+    if (!isGpsActive) return;
     const myPos = locations[myId];
     if (!myPos) return;
 
@@ -138,14 +136,17 @@ export default function LiveMap() {
       {loading && <Loader message="Sistem Hazırlanıyor..." fullScreen={true} />}
 
       <div style={{ height: '60%', width: '100%', position: 'relative' }}>
-        <MapContainer center={[41.0082, 28.9784]} zoom={13} style={{ height: '100%', width: '100%' }}>
+        <MapContainer center={[41.0082, 28.9784]} zoom={13} style={{ height: '100%' }}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           
           {myFirstCoords && <RecenterMap coords={myFirstCoords} />}
 
           {Object.entries(locations).map(([id, pos]) => (
             <Marker key={id} position={pos} icon={customSVGIcon}>
-              <Popup><strong>{id === myId ? "Siz" : id}</strong></Popup>
+              <Popup>
+                <strong>{id === myId ? "Siz" : id}</strong> <br />
+                📍 {pos[0].toFixed(5)}, {pos[1].toFixed(5)}
+              </Popup>
             </Marker>
           ))}
         </MapContainer>
@@ -162,7 +163,7 @@ export default function LiveMap() {
             fontWeight: 'bold', boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
             transition: 'all 0.3s ease-in-out'
           }}>
-          {isGpsActive ? '💾 Konumu Kaydet' : '❌ GPS Bekleniyor...'}
+          {isGpsActive ? '💾 Konumu Kaydet' : '❌ GPS Kapalı'}
         </button>
       </div>
 
