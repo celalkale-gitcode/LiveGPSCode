@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { io } from 'socket.io-client';
@@ -90,45 +90,48 @@ export default function LiveMap() {
     }
   };
 
+  // GPS Takibini başlatan fonksiyonu useCallback ile sarmalıyoruz
+  const startTracking = useCallback(() => {
+    return navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setIsGpsActive(true);
+        setLoading(false); // ✅ Veri geldiği an kesin olarak Loader'ı kapatır
+        
+        socket.emit('konumGonder', { id: myId, lat: latitude, lng: longitude });
+        setLocations(prev => ({ ...prev, [myId]: [latitude, longitude] }));
+        
+        setMyFirstCoords((prev) => prev || [latitude, longitude]);
+      },
+      (err) => {
+        setIsGpsActive(false);
+        // Sadece ilk konum bile alınamadıysa Loader'ı göster
+        if (!myFirstCoords) setLoading(true);
+        
+        setLocations(prev => {
+          const newLocs = { ...prev };
+          delete newLocs[myId];
+          return newLocs;
+        });
+      },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+    );
+  }, [myId, myFirstCoords]);
+
   useEffect(() => {
     fetchHistory();
-    let watchId;
+    let watchId = startTracking();
 
-    // 🚀 GPS TAKİBİNİ BAŞLATAN VE YENİLEYEN FONKSİYON
-    const startTracking = () => {
-      if (watchId) navigator.geolocation.clearWatch(watchId);
-
-      watchId = navigator.geolocation.watchPosition(
-        (pos) => {
-          const { latitude, longitude } = pos.coords;
-          setIsGpsActive(true); // ✅ KONUM AÇILDI: Butonu maviye döndür
-          setLoading(false);
-          
-          socket.emit('konumGonder', { id: myId, lat: latitude, lng: longitude });
-          setLocations(prev => ({ ...prev, [myId]: [latitude, longitude] }));
-          
-          if (!myFirstCoords) setMyFirstCoords([latitude, longitude]);
-        },
-        (err) => {
-          setIsGpsActive(false); // 🛑 KONUM KAPALI: Butonu griye döndür
-          setLoading(false);
-          setLocations(prev => {
-            const newLocs = { ...prev };
-            delete newLocs[myId];
-            return newLocs;
-          });
-        },
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
-      );
-    };
-
-    startTracking();
-
-    // 🔄 RE-CHECK DÖNGÜSÜ: Konum kapalıysa her 3 saniyede bir düzeldi mi diye bakar
+    // 🔄 RE-CHECK DÖNGÜSÜ: Konum kapalıysa kontrol eder
     const intervalId = setInterval(() => {
-      if (!isGpsActive) {
-        startTracking();
-      }
+      // isGpsActive state'ini referans alarak kontrol yapıyoruz
+      setIsGpsActive((currentGpsStatus) => {
+        if (!currentGpsStatus) {
+          if (watchId) navigator.geolocation.clearWatch(watchId);
+          watchId = startTracking();
+        }
+        return currentGpsStatus;
+      });
     }, 3000);
 
     socket.on('konumAl', (data) => {
@@ -140,11 +143,12 @@ export default function LiveMap() {
       clearInterval(intervalId);
       socket.off('konumAl');
     };
-  }, [myId, isGpsActive]); // isGpsActive değiştikçe döngüyü kontrol eder
+  }, [myId, startTracking]); 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%' }}>
-      {loading && <Loader message="GPS Bağlantısı Bekleniyor..." fullScreen={true} />}
+      {/* 🌀 Loader sadece ilk veri yokken ve loading true iken görünür */}
+      {loading && !myFirstCoords && <Loader message="GPS Bağlantısı Bekleniyor..." fullScreen={true} />}
 
       <div style={{ height: '60%', width: '100%', position: 'relative' }}>
         <MapContainer center={[41.0082, 28.9784]} zoom={13} style={{ height: '100%' }}>
