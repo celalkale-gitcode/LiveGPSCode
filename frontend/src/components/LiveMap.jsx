@@ -1,8 +1,8 @@
-
 import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { io } from 'socket.io-client';
+import Swal from 'sweetalert2'; // 👈 SweetAlert2 İçe aktarıldı
 import 'leaflet/dist/leaflet.css';
 
 // Komponentlerimizi içe aktarıyoruz
@@ -20,7 +20,15 @@ const customSVGIcon = L.divIcon({
 const BACKEND_URL = "https://livegps-location.onrender.com";
 const socket = io(BACKEND_URL);
 
-// 📍 Haritayı merkeze alan yardımcı bileşen
+// Profesyonel Bildirim Ayarı (Toast)
+const Toast = Swal.mixin({
+  toast: true,
+  position: 'top-end',
+  showConfirmButton: false,
+  timer: 3000,
+  timerProgressBar: true,
+});
+
 function RecenterMap({ coords }) {
   const map = useMap();
   useEffect(() => {
@@ -33,13 +41,10 @@ export default function LiveMap() {
   const [locations, setLocations] = useState({});
   const [myId] = useState("Cihaz_" + Math.random().toString(36).substr(2, 4));
   const [history, setHistory] = useState([]);
-  
-  // 🔄 Yükleme Durumları
-  const [loading, setLoading] = useState(true);      // Harita/GPS yüklemesi
-  const [listLoading, setListLoading] = useState(true); // Liste yüklemesi
+  const [loading, setLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(true);
   const [myFirstCoords, setMyFirstCoords] = useState(null);
 
-  // 📜 Veritabanından geçmişi çeken fonksiyon
   const fetchHistory = async () => {
     setListLoading(true);
     try {
@@ -53,11 +58,10 @@ export default function LiveMap() {
     }
   };
 
-  // 💾 Konumu Veritabanına Kaydetme
   const saveCurrentLocation = async () => {
     const myCurrentPos = locations[myId]; 
     if (!myCurrentPos) {
-      alert("⚠️ Konum henüz alınamadı, lütfen bekleyin.");
+      Toast.fire({ icon: 'warning', title: 'Konum henüz alınamadı!' });
       return;
     }
 
@@ -73,32 +77,29 @@ export default function LiveMap() {
       });
 
       if (response.ok) {
-        alert("✅ Konum başarıyla kaydedildi!");
-        fetchHistory(); // Listeyi anında tazele
+        Toast.fire({ icon: 'success', title: 'Konum kaydedildi!' }); // 👈 Profesyonel başarı mesajı
+        fetchHistory();
       } else {
-        alert("❌ Kayıt başarısız.");
+        Swal.fire({ icon: 'error', title: 'Hata!', text: 'Kayıt başarısız oldu.' });
       }
     } catch (error) {
-      console.error(error);
-      alert("❌ Bağlantı hatası.");
+      Swal.fire({ icon: 'error', title: 'Bağlantı Hatası', text: 'Sunucuya ulaşılamıyor.' });
     }
   };
 
   useEffect(() => {
     fetchHistory();
-    
     const watchId = navigator.geolocation.watchPosition((pos) => {
       const { latitude, longitude } = pos.coords;
       socket.emit('konumGonder', { id: myId, lat: latitude, lng: longitude });
       setLocations(prev => ({ ...prev, [myId]: [latitude, longitude] }));
-      
       if (loading) {
         setMyFirstCoords([latitude, longitude]);
         setLoading(false);
       }
     }, (err) => {
-      console.error(err);
       setLoading(false);
+      Toast.fire({ icon: 'error', title: 'GPS izni verilmedi!' });
     }, { enableHighAccuracy: true });
 
     socket.on('konumAl', (data) => {
@@ -113,17 +114,12 @@ export default function LiveMap() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%' }}>
-      
-      {/* 🌀 Tam Ekran Loader (Harita/GPS beklerken) */}
       {loading && <Loader message="GPS Bekleniyor..." fullScreen={true} />}
 
-      {/* ÜST KISIM: HARİTA (%60 boy) */}
       <div style={{ height: '60%', width: '100%', position: 'relative' }}>
         <MapContainer center={[41.0082, 28.9784]} zoom={13} style={{ height: '100%' }}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          
           {myFirstCoords && <RecenterMap coords={myFirstCoords} />}
-
           {Object.entries(locations).map(([id, pos]) => (
             <Marker key={id} position={pos} icon={customSVGIcon}>
               <Popup>
@@ -138,19 +134,19 @@ export default function LiveMap() {
           onClick={saveCurrentLocation} 
           style={{ 
             position: 'absolute', bottom: '20px', right: '20px', zIndex: 1000, 
-            padding: '14px 20px', backgroundColor: '#3B82F6', color: 'white', 
+            padding: '14px 24px', backgroundColor: '#3B82F6', color: 'white', 
             border: 'none', borderRadius: '50px', cursor: 'pointer', 
             fontWeight: 'bold', boxShadow: '0 4px 15px rgba(0,0,0,0.3)' 
           }}>
-          📍 Konumu Kaydet
+          💾 Konumu Kaydet
         </button>
       </div>
 
-      {/* ALT KISIM: LİSTE KOMPONENTİ (%40 boy) */}
       <div style={{ height: '40%', width: '100%' }}>
         <LocationList history={history} listLoading={listLoading} />
       </div>
     </div>
   );
 }
+
 
