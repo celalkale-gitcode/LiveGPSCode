@@ -44,6 +44,7 @@ export default function LiveMap() {
   const [isGpsActive, setIsGpsActive] = useState(false);
 
   const watchIdRef = useRef(null);
+  const lastSignalRef = useRef(0); // 🕒 Son sinyal zamanını milisaniye olarak tutar
 
   const fetchHistory = async () => {
     setListLoading(true);
@@ -63,7 +64,8 @@ export default function LiveMap() {
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         const { latitude, longitude } = pos.coords;
-        setIsGpsActive(true); // ✅ Sinyal geldi, aktif yap
+        lastSignalRef.current = Date.now(); // ✅ Kalp atışı: Sinyal geldi!
+        setIsGpsActive(true);
         setLoading(false);
         
         setLocations(prev => ({ ...prev, [myId]: [latitude, longitude] }));
@@ -72,12 +74,12 @@ export default function LiveMap() {
         if (!myFirstCoords) setMyFirstCoords([latitude, longitude]);
       },
       () => {
-        setIsGpsActive(false); // 🛑 Sinyal koptu, pasif yap
+        setIsGpsActive(false);
         setLocations(prev => { const n = { ...prev }; delete n[myId]; return n; });
       },
       { 
         enableHighAccuracy: true, 
-        timeout: 3000, // ❗ 3 saniye veri gelmezse hata ver (Butonu griye çek)
+        timeout: 5000, 
         maximumAge: 0 
       }
     );
@@ -89,15 +91,20 @@ export default function LiveMap() {
 
     const loaderTimeout = setTimeout(() => setLoading(false), 2500);
 
-    // 🔄 REAL-TIME KONTROL: Konum kapalıysa sürekli uyandırmayı dene
+    // 🔄 GÜVENLİK DÖNGÜSÜ: Hem uyandırır hem de "hayalet" sinyalleri öldürür
     const intervalId = setInterval(() => {
-      // isGpsActive state'ini en güncel haliyle kontrol edip gerekirse uyandırır
-      setIsGpsActive(currentStatus => {
-        if (!currentStatus) {
-          startTracking();
-        }
-        return currentStatus;
-      });
+      const now = Date.now();
+      
+      // 1. KONTROL: Eğer GPS aktif görünüyorsa ama 6 saniyedir taze veri gelmediyse PASİFE çek
+      if (isGpsActive && (now - lastSignalRef.current > 6000)) {
+        setIsGpsActive(false);
+        setLocations(prev => { const n = { ...prev }; delete n[myId]; return n; });
+      }
+
+      // 2. KONTROL: Eğer GPS kapalıysa tekrar uyandırmayı dene
+      if (!isGpsActive) {
+        startTracking();
+      }
     }, 3000);
 
     socket.on('konumAl', (data) => {
@@ -110,7 +117,7 @@ export default function LiveMap() {
       clearTimeout(loaderTimeout);
       socket.off('konumAl');
     };
-  }, [startTracking]);
+  }, [startTracking, isGpsActive, myId]);
 
   const saveCurrentLocation = async () => {
     if (!isGpsActive) return;
