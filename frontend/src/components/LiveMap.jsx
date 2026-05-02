@@ -4,14 +4,19 @@ import L from 'leaflet';
 import { io } from 'socket.io-client';
 import 'leaflet/dist/leaflet.css';
 
-// 🚀 KESİN ÇÖZÜM: İkonu kodun içine gömüyoruz
-const heartIcon = new L.Icon({
-  iconUrl: 'https://githubusercontent.com',
-  shadowUrl: 'https://cloudflare.com',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
+// ... (importlar aynı)
+
+// 🚀 EN GARANTİ YÖNTEM: İkonu SVG kodu olarak tanımlıyoruz
+const customSVGIcon = L.divIcon({
+  html: `
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://w3.org">
+      <path d="M12 21C16 17.5 19 14.4087 19 11.2C19 7.22355 15.866 4 12 4C8.13401 4 5 7.22355 5 11.2C5 14.4087 8 17.5 12 21Z" fill="#3B82F6" stroke="white" stroke-width="2"/>
+      <circle cx="12" cy="11" r="3" fill="white"/>
+    </svg>
+  `,
+  className: "custom-gps-icon",
+  iconSize: [30, 30],
+  iconAnchor: [15, 30],
 });
 
 // Render backend URL'niz
@@ -52,9 +57,10 @@ export default function LiveMap() {
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         
         {Object.entries(locations).map(([id, position]) => (
-          <Marker key={id} position={position} icon={heartIcon}>
-            <Popup>{id === myId ? "Siz" : `Cihaz: ${id}`}</Popup>
-          </Marker>
+          // Harita içindeki Marker kullanımı:
+         <Marker key={id} position={position} icon={customSVGIcon}>
+           <Popup>{id === myId ? "Siz" : `Cihaz: ${id}`}</Popup>
+         </Marker>
         ))}
       </MapContainer>
     </div>
