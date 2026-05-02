@@ -41,8 +41,6 @@ export default function LiveMap() {
   const [loading, setLoading] = useState(true);
   const [listLoading, setListLoading] = useState(true);
   const [myFirstCoords, setMyFirstCoords] = useState(null);
-  
-  // 🛰️ GPS'in o an gerçekten açık olup olmadığını takip eden yeni state
   const [isGpsActive, setIsGpsActive] = useState(false);
 
   const fetchHistory = async () => {
@@ -56,11 +54,11 @@ export default function LiveMap() {
   };
 
   const saveCurrentLocation = async () => {
-    // 🛑 KRİTİK KONTROL: GPS kapalıysa eski veriyi kaydetme
+    // 🛑 REAL-TIME KONTROL: GPS kapalıysa butona basılsa dahi işlem yapmaz
     if (!isGpsActive) {
       Swal.fire({
         icon: 'error',
-        title: 'GPS Sinyali Yok',
+        title: 'Sinyal Kesildi',
         text: 'Konum servisleriniz kapalıyken kayıt yapılamaz. Lütfen GPS\'i açın.',
         confirmButtonColor: '#3B82F6'
       });
@@ -98,7 +96,7 @@ export default function LiveMap() {
   useEffect(() => {
     fetchHistory();
     const watchId = navigator.geolocation.watchPosition((pos) => {
-      // ✅ GPS Verisi Geliyor
+      // ✅ CANLI YAYIN: GPS'den veri geldiği an buton Mavi olur
       setIsGpsActive(true);
       
       const { latitude, longitude } = pos.coords;
@@ -110,21 +108,22 @@ export default function LiveMap() {
         setLoading(false);
       }
     }, (err) => {
-      // 🛑 GPS Kapatıldı veya Hata Veriyor
+      // 🛑 REAL-TIME DURDURMA: GPS kapatıldığı saniye buton Griye döner
       setIsGpsActive(false);
       setLoading(false);
       
-      // Hata anında kendi ikonunu haritadan sil (eski veriyi gösterme)
+      // Haritadaki hayalet ikonu temizle
       setLocations(prev => {
         const newLocs = { ...prev };
         delete newLocs[myId];
         return newLocs;
       });
 
-      Toast.fire({ icon: 'error', title: 'GPS bağlantısı kesildi!' });
+      console.warn("GPS Durumu Değişti:", err.message);
     }, { 
       enableHighAccuracy: true,
-      maximumAge: 0 // Önbellekteki eski veriyi asla kabul etme
+      maximumAge: 0,
+      timeout: 4000 // ❗ 4 saniye sinyal gelmezse GPS'i kapalı say (Real-time tepki için)
     });
 
     socket.on('konumAl', (data) => {
@@ -155,15 +154,19 @@ export default function LiveMap() {
           ))}
         </MapContainer>
         
+        {/* 🔘 REAL-TIME DİNAMİK BUTON */}
         <button 
           onClick={saveCurrentLocation} 
+          disabled={!isGpsActive} // ❗ GPS kapalıyken tıklamayı tamamen kilitler
           style={{ 
             position: 'absolute', bottom: '20px', right: '20px', zIndex: 1000, 
             padding: '14px 24px', 
-            backgroundColor: isGpsActive ? '#3B82F6' : '#9ca3af', // GPS kapalıyken buton grileşir
+            backgroundColor: isGpsActive ? '#3B82F6' : '#6b7280', // Renk anında değişir
             color: 'white', 
-            border: 'none', borderRadius: '50px', cursor: isGpsActive ? 'pointer' : 'not-allowed', 
-            fontWeight: 'bold', boxShadow: '0 4px 15px rgba(0,0,0,0.3)' 
+            border: 'none', borderRadius: '50px', 
+            cursor: isGpsActive ? 'pointer' : 'not-allowed', 
+            fontWeight: 'bold', boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
+            transition: 'all 0.4s ease-in-out' // Yumuşak geçiş efekti
           }}>
           {isGpsActive ? '💾 Konumu Kaydet' : '❌ GPS Kapalı'}
         </button>
@@ -175,6 +178,3 @@ export default function LiveMap() {
     </div>
   );
 }
-
-
-
