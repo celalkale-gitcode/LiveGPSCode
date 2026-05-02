@@ -2,14 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { io } from 'socket.io-client';
-import Swal from 'sweetalert2'; // 👈 SweetAlert2 İçe aktarıldı
+import Swal from 'sweetalert2'; 
 import 'leaflet/dist/leaflet.css';
 
-// Komponentlerimizi içe aktarıyoruz
 import LocationList from './LocationList';
 import Loader from './Loader';
 
-// 🚀 İkon SVG Tanımı
 const customSVGIcon = L.divIcon({
   html: `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://w3.org"><path d="M12 21C16 17.5 19 14.4087 19 11.2C19 7.22355 15.866 4 12 4C8.13401 4 5 7.22355 5 11.2C5 14.4087 8 17.5 12 21Z" fill="#3B82F6" stroke="white" stroke-width="2"/><circle cx="12" cy="11" r="3" fill="white"/></svg>`,
   className: "custom-gps-icon",
@@ -20,7 +18,6 @@ const customSVGIcon = L.divIcon({
 const BACKEND_URL = "https://livegps-location.onrender.com";
 const socket = io(BACKEND_URL);
 
-// Profesyonel Bildirim Ayarı (Toast)
 const Toast = Swal.mixin({
   toast: true,
   position: 'top-end',
@@ -44,6 +41,9 @@ export default function LiveMap() {
   const [loading, setLoading] = useState(true);
   const [listLoading, setListLoading] = useState(true);
   const [myFirstCoords, setMyFirstCoords] = useState(null);
+  
+  // 🛰️ GPS'in o an gerçekten açık olup olmadığını takip eden yeni state
+  const [isGpsActive, setIsGpsActive] = useState(false);
 
   const fetchHistory = async () => {
     setListLoading(true);
@@ -51,17 +51,25 @@ export default function LiveMap() {
       const res = await fetch(`${BACKEND_URL}/map/history`);
       const data = await res.json();
       setHistory(data);
-    } catch (err) { 
-      console.error("Geçmiş çekilemedi:", err); 
-    } finally {
-      setListLoading(false);
-    }
+    } catch (err) { console.error("Geçmiş çekilemedi:", err); } 
+    finally { setListLoading(false); }
   };
 
   const saveCurrentLocation = async () => {
+    // 🛑 KRİTİK KONTROL: GPS kapalıysa eski veriyi kaydetme
+    if (!isGpsActive) {
+      Swal.fire({
+        icon: 'error',
+        title: 'GPS Sinyali Yok',
+        text: 'Konum servisleriniz kapalıyken kayıt yapılamaz. Lütfen GPS\'i açın.',
+        confirmButtonColor: '#3B82F6'
+      });
+      return;
+    }
+
     const myCurrentPos = locations[myId]; 
     if (!myCurrentPos) {
-      Toast.fire({ icon: 'warning', title: 'Konum henüz alınamadı!' });
+      Toast.fire({ icon: 'warning', title: 'Konum bekleniyor...' });
       return;
     }
 
@@ -77,10 +85,10 @@ export default function LiveMap() {
       });
 
       if (response.ok) {
-        Toast.fire({ icon: 'success', title: 'Konum kaydedildi!' }); // 👈 Profesyonel başarı mesajı
+        Toast.fire({ icon: 'success', title: 'Konum kaydedildi!' });
         fetchHistory();
       } else {
-        Swal.fire({ icon: 'error', title: 'Hata!', text: 'Kayıt başarısız oldu.' });
+        Swal.fire({ icon: 'error', title: 'Hata!', text: 'Kayıt başarısız.' });
       }
     } catch (error) {
       Swal.fire({ icon: 'error', title: 'Bağlantı Hatası', text: 'Sunucuya ulaşılamıyor.' });
@@ -90,17 +98,34 @@ export default function LiveMap() {
   useEffect(() => {
     fetchHistory();
     const watchId = navigator.geolocation.watchPosition((pos) => {
+      // ✅ GPS Verisi Geliyor
+      setIsGpsActive(true);
+      
       const { latitude, longitude } = pos.coords;
       socket.emit('konumGonder', { id: myId, lat: latitude, lng: longitude });
       setLocations(prev => ({ ...prev, [myId]: [latitude, longitude] }));
+      
       if (loading) {
         setMyFirstCoords([latitude, longitude]);
         setLoading(false);
       }
     }, (err) => {
+      // 🛑 GPS Kapatıldı veya Hata Veriyor
+      setIsGpsActive(false);
       setLoading(false);
-      Toast.fire({ icon: 'error', title: 'GPS izni verilmedi!' });
-    }, { enableHighAccuracy: true });
+      
+      // Hata anında kendi ikonunu haritadan sil (eski veriyi gösterme)
+      setLocations(prev => {
+        const newLocs = { ...prev };
+        delete newLocs[myId];
+        return newLocs;
+      });
+
+      Toast.fire({ icon: 'error', title: 'GPS bağlantısı kesildi!' });
+    }, { 
+      enableHighAccuracy: true,
+      maximumAge: 0 // Önbellekteki eski veriyi asla kabul etme
+    });
 
     socket.on('konumAl', (data) => {
       setLocations(prev => ({ ...prev, [data.id]: [data.lat, data.lng] }));
@@ -134,11 +159,13 @@ export default function LiveMap() {
           onClick={saveCurrentLocation} 
           style={{ 
             position: 'absolute', bottom: '20px', right: '20px', zIndex: 1000, 
-            padding: '14px 24px', backgroundColor: '#3B82F6', color: 'white', 
-            border: 'none', borderRadius: '50px', cursor: 'pointer', 
+            padding: '14px 24px', 
+            backgroundColor: isGpsActive ? '#3B82F6' : '#9ca3af', // GPS kapalıyken buton grileşir
+            color: 'white', 
+            border: 'none', borderRadius: '50px', cursor: isGpsActive ? 'pointer' : 'not-allowed', 
             fontWeight: 'bold', boxShadow: '0 4px 15px rgba(0,0,0,0.3)' 
           }}>
-          💾 Konumu Kaydet
+          {isGpsActive ? '💾 Konumu Kaydet' : '❌ GPS Kapalı'}
         </button>
       </div>
 
@@ -148,5 +175,6 @@ export default function LiveMap() {
     </div>
   );
 }
+
 
 
