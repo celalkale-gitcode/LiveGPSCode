@@ -1,20 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 export const useGPS = (myId, socket) => {
   const [position, setPosition] = useState(null);
   const [isGpsActive, setIsGpsActive] = useState(false);
-  const lastSignalTime = useRef(0);
-  const watchIdRef = useRef(null);
 
-  const startTracking = () => {
-    if (watchIdRef.current) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-    }
-
-    watchIdRef.current = navigator.geolocation.watchPosition(
+  // 🚀 ANA MOTOR: Tekil bir sorgu yapar ve durumu netleştirir
+  const askLocation = useCallback(() => {
+    navigator.geolocation.getCurrentPosition(
       (pos) => {
         const coords = [pos.coords.latitude, pos.coords.longitude];
-        lastSignalTime.current = Date.now();
         setIsGpsActive(true);
         setPosition(coords);
         
@@ -27,34 +21,27 @@ export const useGPS = (myId, socket) => {
         }
       },
       () => {
+        // 🛑 Konum kapalıysa veya hata verirse her şeyi anında sıfırla
         setIsGpsActive(false);
         setPosition(null);
       },
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      { 
+        enableHighAccuracy: true, 
+        timeout: 4000, // 4 saniye içinde cevap gelmezse GPS'i ölü say
+        maximumAge: 0   // Asla eski veriyi kabul etme
+      }
     );
-  };
+  }, [myId, socket]);
 
   useEffect(() => {
-    startTracking();
+    // İlk açılışta hemen kontrol et
+    askLocation();
 
-    const interval = setInterval(() => {
-      const now = Date.now();
-      if (isGpsActive && (now - lastSignalTime.current > 6000)) {
-        setIsGpsActive(false);
-        setPosition(null);
-      }
+    // 🔄 REAL-TIME DÖNGÜ: Her 3 saniyede bir durumu zorla güncelle
+    const interval = setInterval(askLocation, 3000);
 
-      if (!isGpsActive) {
-        startTracking();
-      }
-    }, 3000);
-
-    return () => {
-      if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
-      clearInterval(interval);
-    };
-    // eslint-disable-next-line
-  }, [myId]); 
+    return () => clearInterval(interval);
+  }, [askLocation]);
 
   return { position, isGpsActive };
 };
