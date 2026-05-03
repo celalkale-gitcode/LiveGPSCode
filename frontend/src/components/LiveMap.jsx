@@ -16,7 +16,7 @@ const customSVGIcon = L.divIcon({
   iconAnchor: [15, 30],
 });
 
-const BACKEND_URL = "https://onrender.com";
+const BACKEND_URL = "https://livegps-location.onrender.com";
 const socket = io(BACKEND_URL);
 
 const Toast = Swal.mixin({
