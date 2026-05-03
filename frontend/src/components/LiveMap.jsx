@@ -7,7 +7,7 @@ import 'leaflet/dist/leaflet.css';
 
 import LocationList from './LocationList';
 import Loader from './Loader';
-import { useGPS } from '../hooks/useGPS'; // 👈 Modül yolu
+import { useGPS } from '../hooks/useGPS';
 
 const customSVGIcon = L.divIcon({
   html: `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://w3.org"><path d="M12 21C16 17.5 19 14.4087 19 11.2C19 7.22355 15.866 4 12 4C8.13401 4 5 7.22355 5 11.2C5 14.4087 8 17.5 12 21Z" fill="#3B82F6" stroke="white" stroke-width="2"/><circle cx="12" cy="11" r="3" fill="white"/></svg>`,
@@ -41,21 +41,21 @@ export default function LiveMap() {
   const [listLoading, setListLoading] = useState(true);
   const [appReady, setAppReady] = useState(false);
 
-  // 🚀 Modülden verileri çekiyoruz
+  // 🛰️ MODÜL BAĞLANTISI
   const { position, isGpsActive } = useGPS(myId, socket);
 
   const fetchHistory = async () => {
     setListLoading(true);
     try {
       const res = await fetch(`${BACKEND_URL}/map/history`);
-      setHistory(await res.json());
-    } catch (err) { console.error("Geçmiş çekilemedi:", err); } 
+      const data = await res.json();
+      setHistory(data);
+    } catch (err) { console.error(err); } 
     finally { setListLoading(false); }
   };
 
   useEffect(() => {
     fetchHistory();
-    // İlk girişte loader'ı 2.5 saniye göster
     const timer = setTimeout(() => setAppReady(true), 2500);
 
     socket.on('konumAl', (data) => {
@@ -69,10 +69,7 @@ export default function LiveMap() {
   }, []);
 
   const saveCurrentLocation = async () => {
-    if (!isGpsActive || !position) {
-        Swal.fire({ icon: 'error', title: 'GPS Kapalı', text: 'Konum sinyali yokken kayıt yapılamaz.' });
-        return;
-    }
+    if (!isGpsActive || !position) return;
 
     try {
       const response = await fetch(`${BACKEND_URL}/map/save`, {
@@ -82,7 +79,7 @@ export default function LiveMap() {
       });
       if (response.ok) {
         Toast.fire({ icon: 'success', title: 'Konum kaydedildi!' });
-        fetchHistory(); // Listeyi güncelle
+        fetchHistory(); 
       }
     } catch (error) { console.error("Bağlantı hatası"); }
   };
@@ -97,7 +94,7 @@ export default function LiveMap() {
           
           {position && isGpsActive && <RecenterMap coords={position} />}
           
-          {/* 📍 İKON KONTROLÜ: isGpsActive false olduğu an bu Marker DOM'dan silinir */}
+          {/* 📍 İKON SADECE GPS AKTİFSE GÖRÜNÜR (Google Maps Mantığı) */}
           {isGpsActive && position && (
             <Marker position={position} icon={customSVGIcon}>
               <Popup><strong>Siz</strong> <br /> {position[0].toFixed(5)}, {position[1].toFixed(5)}</Popup>
@@ -119,7 +116,7 @@ export default function LiveMap() {
             color: 'white', border: 'none', borderRadius: '50px', 
             cursor: isGpsActive ? 'pointer' : 'not-allowed', 
             fontWeight: 'bold', boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
-            transition: 'all 0.3s ease'
+            transition: 'background-color 0.3s ease'
           }}>
           {isGpsActive ? '💾 Konumu Kaydet' : '❌ GPS Kapalı'}
         </button>
