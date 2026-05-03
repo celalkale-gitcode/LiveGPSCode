@@ -6,12 +6,11 @@ export const useGPS = (myId, socket) => {
   const lastSuccessTime = useRef(Date.now());
   const isQuerying = useRef(false);
 
-  // 🛡️ İzin durumunu direkt tarayıcı ayarlarından sorgula (En Hızlı Yöntem)
+  // 🛡️ 1. GÜVENLİK: İzin durumunu direkt tarayıcı ayarlarından sorgula
   const checkPermissions = useCallback(async () => {
     try {
       if (navigator.permissions && navigator.permissions.query) {
         const result = await navigator.permissions.query({ name: 'geolocation' });
-        // Kullanıcı konumu kapattıysa beklemeden her şeyi pasif yap
         if (result.state === 'denied') {
           setIsGpsActive(false);
           setPosition(null);
@@ -28,6 +27,7 @@ export const useGPS = (myId, socket) => {
     const hasPermission = await checkPermissions();
     if (!hasPermission) return;
 
+    // 🔒 Çakışma Kilidi: Sorgu devam ediyorsa yenisini başlatma
     if (isQuerying.current) return;
     isQuerying.current = true;
 
@@ -39,23 +39,19 @@ export const useGPS = (myId, socket) => {
         setPosition(coords);
         
         if (socket) {
-          socket.emit('konumGonder', { 
-            id: myId, 
-            lat: pos.coords.latitude, 
-            lng: pos.coords.longitude 
-          });
+          socket.emit('konumGonder', { id: myId, lat: coords[0], lng: coords[1] });
         }
         isQuerying.current = false;
       },
       () => {
-        // Hata durumunda (Konum kapandıysa) uyduyu beklemeden kapat
+        // Hata durumunda (Konum kapandıysa) beklemeden pasife çek
         setIsGpsActive(false);
         setPosition(null);
         isQuerying.current = false;
       },
       { 
         enableHighAccuracy: true, 
-        timeout: 4000, // Sorgu süresini kısalttık ki tepki hızı artsın
+        timeout: 6000, 
         maximumAge: 0  
       }
     );
@@ -63,15 +59,17 @@ export const useGPS = (myId, socket) => {
 
   useEffect(() => {
     checkLocation();
-    const queryInterval = setInterval(checkLocation, 3500);
+    const queryInterval = setInterval(() => {
+      if (!isQuerying.current) checkLocation();
+    }, 4000);
 
-    // 🕵️ HEARTBEAT: Sinyal gecikirse (timeout beklemeden) kontrol eder
+    // 🕵️ HEARTBEAT: Sinyal gecikirse kontrol
     const heartbeatInterval = setInterval(() => {
-      if (Date.now() - lastSuccessTime.current > 7000) {
+      if (Date.now() - lastSuccessTime.current > 10000) {
         setIsGpsActive(false);
         setPosition(null);
       }
-    }, 2000);
+    }, 3000);
 
     return () => {
       clearInterval(queryInterval);
@@ -80,6 +78,6 @@ export const useGPS = (myId, socket) => {
     };
   }, [checkLocation]);
 
-  return { position, isGpsActive };
+  // checkPermissions fonksiyonunu LiveMap.jsx'in kullanabilmesi için return ediyoruz
+  return { position, isGpsActive, checkPermissions };
 };
-
