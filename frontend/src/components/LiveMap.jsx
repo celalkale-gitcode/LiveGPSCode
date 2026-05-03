@@ -16,7 +16,7 @@ const customSVGIcon = L.divIcon({
   iconAnchor: [15, 30],
 });
 
-const BACKEND_URL = "https://livegps-location.onrender.com";
+const BACKEND_URL = "https://onrender.com";
 const socket = io(BACKEND_URL);
 
 const Toast = Swal.mixin({
@@ -41,8 +41,8 @@ export default function LiveMap() {
   const [listLoading, setListLoading] = useState(true);
   const [appReady, setAppReady] = useState(false);
 
-  // 🛰️ MODÜL BAĞLANTISI (Güçlendirilmiş)
-  const { position, isGpsActive } = useGPS(myId, socket);
+  // 🛰️ checkPermissions fonksiyonunu modülden aldık
+  const { position, isGpsActive, checkPermissions } = useGPS(myId, socket);
 
   const fetchHistory = async () => {
     setListLoading(true);
@@ -57,11 +57,9 @@ export default function LiveMap() {
   useEffect(() => {
     fetchHistory();
     const timer = setTimeout(() => setAppReady(true), 3000);
-
     socket.on('konumAl', (data) => {
       setLocations(prev => ({ ...prev, [data.id]: [data.lat, data.lng] }));
     });
-
     return () => {
       socket.off('konumAl');
       clearTimeout(timer);
@@ -69,15 +67,17 @@ export default function LiveMap() {
   }, []);
 
   const saveCurrentLocation = async () => {
-    // 🛑 KRİTİK GÜVENLİK KAPISI: Butona tıklandığı salisede konum kapalıysa işlemi durdur
-    if (!isGpsActive || !position) {
+    // 🛡️ 2. GÜVENLİK: Butona basıldığı AN izinleri ve sinyali tekrar kontrol et
+    const hasPermission = await checkPermissions();
+
+    if (!hasPermission || !isGpsActive || !position) {
       Swal.fire({
         icon: 'error',
-        title: 'Bağlantı Kesildi!',
-        text: 'Konum servisleriniz kapalıyken kayıt yapılamaz.',
+        title: 'Kayıt Yapılamadı',
+        text: 'Konum servisleriniz kapalı görünüyor. Lütfen açıp tekrar deneyin.',
         confirmButtonColor: '#3B82F6'
       });
-      return;
+      return; // 🛑 Milisaniyelik koruma: Fetch asla başlatılmaz.
     }
 
     try {
@@ -90,17 +90,11 @@ export default function LiveMap() {
           lng: position[1] 
         }),
       });
-
       if (response.ok) {
         Toast.fire({ icon: 'success', title: 'Konum kaydedildi!' });
         fetchHistory(); 
-      } else {
-        Swal.fire({ icon: 'error', title: 'Hata', text: 'Kayıt başarısız oldu.' });
       }
-    } catch (error) {
-      console.error("Ağ Hatası:", error);
-      Swal.fire({ icon: 'error', title: 'Bağlantı Hatası', text: 'Sunucuya ulaşılamıyor.' });
-    }
+    } catch (error) { console.error("Hata"); }
   };
 
   return (
@@ -113,13 +107,9 @@ export default function LiveMap() {
           
           {position && isGpsActive && <RecenterMap coords={position} />}
           
-          {/* 📍 İKON SADECE GPS AKTİFSE GÖRÜNÜR (Google Maps Mantığı) */}
           {isGpsActive && position && (
             <Marker position={position} icon={customSVGIcon}>
-              <Popup>
-                <strong>Siz</strong> <br /> 
-                {position[0].toFixed(5)}, {position[1].toFixed(5)}
-              </Popup>
+              <Popup><strong>Siz</strong> <br /> {position[0].toFixed(5)}, {position[1].toFixed(5)}</Popup>
             </Marker>
           )}
 
@@ -138,7 +128,7 @@ export default function LiveMap() {
             color: 'white', border: 'none', borderRadius: '50px', 
             cursor: isGpsActive ? 'pointer' : 'not-allowed', 
             fontWeight: 'bold', boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
-            transition: 'all 0.3s ease-in-out',
+            transition: 'all 0.3s ease',
             opacity: isGpsActive ? 1 : 0.7
           }}>
           {isGpsActive ? '💾 Konumu Kaydet' : '❌ Sinyal Bekleniyor...'}
