@@ -41,7 +41,7 @@ export default function LiveMap() {
   const [listLoading, setListLoading] = useState(true);
   const [appReady, setAppReady] = useState(false);
 
-  // 🛰️ checkPermissions fonksiyonunu modülden aldık
+  // 🛰️ MODÜL BAĞLANTISI
   const { position, isGpsActive, checkPermissions } = useGPS(myId, socket);
 
   const fetchHistory = async () => {
@@ -67,7 +67,7 @@ export default function LiveMap() {
   }, []);
 
   const saveCurrentLocation = async () => {
-    // 🛡️ 2. GÜVENLİK: Butona basıldığı AN izinleri ve sinyali tekrar kontrol et
+    // 🛡️ Milisaniyelik Son Kontrol
     const hasPermission = await checkPermissions();
 
     if (!hasPermission || !isGpsActive || !position) {
@@ -77,7 +77,7 @@ export default function LiveMap() {
         text: 'Konum servisleriniz kapalı görünüyor. Lütfen açıp tekrar deneyin.',
         confirmButtonColor: '#3B82F6'
       });
-      return; // 🛑 Milisaniyelik koruma: Fetch asla başlatılmaz.
+      return; 
     }
 
     try {
@@ -86,7 +86,7 @@ export default function LiveMap() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           id: myId, 
-          lat: position[0], 
+          lat: position[0], // Dizi formatından koordinatı al
           lng: position[1] 
         }),
       });
