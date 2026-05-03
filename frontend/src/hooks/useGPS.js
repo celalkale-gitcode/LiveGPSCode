@@ -6,23 +6,25 @@ export const useGPS = (myId, socket) => {
   const lastSuccessTime = useRef(Date.now());
   const isQuerying = useRef(false);
 
-  // 🛡️ İzin durumunu anlık sorgula (Sinyal beklemez, ayarlara bakar)
+  // 🛡️ İzin durumunu direkt tarayıcı ayarlarından sorgula (En Hızlı Yöntem)
   const checkPermissions = useCallback(async () => {
     try {
       if (navigator.permissions && navigator.permissions.query) {
         const result = await navigator.permissions.query({ name: 'geolocation' });
+        // Kullanıcı konumu kapattıysa beklemeden her şeyi pasif yap
         if (result.state === 'denied') {
           setIsGpsActive(false);
           setPosition(null);
           return false;
         }
       }
-    } catch (e) { console.warn("Permission API yetersiz."); }
+    } catch (e) {
+      console.warn("Permission API desteklenmiyor");
+    }
     return true;
   }, []);
 
   const checkLocation = useCallback(async () => {
-    // Önce izne bak, kapalıysa sorgu bile atma, butonu anında düşür
     const hasPermission = await checkPermissions();
     if (!hasPermission) return;
 
@@ -37,17 +39,25 @@ export const useGPS = (myId, socket) => {
         setPosition(coords);
         
         if (socket) {
-          socket.emit('konumGonder', { id: myId, lat: coords[0], lng: coords[1] });
+          socket.emit('konumGonder', { 
+            id: myId, 
+            lat: pos.coords.latitude, 
+            lng: pos.coords.longitude 
+          });
         }
         isQuerying.current = false;
       },
       () => {
-        // Hata geldiği an beklemeden kapat
+        // Hata durumunda (Konum kapandıysa) uyduyu beklemeden kapat
         setIsGpsActive(false);
         setPosition(null);
         isQuerying.current = false;
       },
-      { enableHighAccuracy: true, timeout: 3000, maximumAge: 0 } // Bekleme süresini 3sn'ye indirdik
+      { 
+        enableHighAccuracy: true, 
+        timeout: 4000, // Sorgu süresini kısalttık ki tepki hızı artsın
+        maximumAge: 0  
+      }
     );
   }, [myId, socket, checkPermissions]);
 
@@ -55,9 +65,9 @@ export const useGPS = (myId, socket) => {
     checkLocation();
     const queryInterval = setInterval(checkLocation, 3500);
 
-    // 🕵️ Heartbeat süresini 12'den 6 saniyeye indirdik (Hayalet kaydı engeller)
+    // 🕵️ HEARTBEAT: Sinyal gecikirse (timeout beklemeden) kontrol eder
     const heartbeatInterval = setInterval(() => {
-      if (Date.now() - lastSuccessTime.current > 6000) {
+      if (Date.now() - lastSuccessTime.current > 7000) {
         setIsGpsActive(false);
         setPosition(null);
       }
@@ -72,3 +82,4 @@ export const useGPS = (myId, socket) => {
 
   return { position, isGpsActive };
 };
+
