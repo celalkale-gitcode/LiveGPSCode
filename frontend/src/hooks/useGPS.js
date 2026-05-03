@@ -1,18 +1,22 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export const useGPS = (myId, socket) => {
   const [position, setPosition] = useState(null);
   const [isGpsActive, setIsGpsActive] = useState(false);
+  const isQuerying = useRef(false); // 🔒 Çakışmayı önleyen kilit mekanizması
 
-  // 🚀 ANA SORGULAMA FONKSİYONU
   const checkLocation = useCallback(() => {
+    // Eğer halihazırda bir sorgu yapılıyorsa (cevap bekleniyorsa) yenisini başlatma
+    if (isQuerying.current) return;
+
+    isQuerying.current = true; // Sorguyu kilitle
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const coords = [pos.coords.latitude, pos.coords.longitude];
         setIsGpsActive(true);
         setPosition(coords);
         
-        // Backend'e canlı soket yayını
         if (socket) {
           socket.emit('konumGonder', { 
             id: myId, 
@@ -20,28 +24,32 @@ export const useGPS = (myId, socket) => {
             lng: pos.coords.longitude 
           });
         }
+        isQuerying.current = false; // Kilidi aç (Başarılı)
       },
       () => {
-        // 🛑 KONUM KAPALI: Bilgileri anında temizle
         setIsGpsActive(false);
         setPosition(null);
+        isQuerying.current = false; // Kilidi aç (Hata/Kapalı)
       },
       { 
         enableHighAccuracy: true, 
-        timeout: 4000, // 4 saniye içinde cevap gelmezse kapalı say
-        maximumAge: 0  // Her zaman en taze veriyi zorla
+        timeout: 6000, // Sorgu süresini biraz uzatarak tarayıcıya nefes aldırdık
+        maximumAge: 0  
       }
     );
   }, [myId, socket]);
 
   useEffect(() => {
-    // İlk açılışta hemen kontrol et
+    // İlk girişte sorgula
     checkLocation();
 
-    // 🔄 REAL-TIME DÖNGÜ: Her 3 saniyede bir konumu zorla sorgula
-    const interval = setInterval(checkLocation, 3000);
+    // 🔄 REAL-TIME DÖNGÜ: Her 4 saniyede bir durumu kontrol et
+    const interval = setInterval(checkLocation, 4000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      isQuerying.current = false;
+    };
   }, [checkLocation]);
 
   return { position, isGpsActive };
