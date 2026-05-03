@@ -41,7 +41,7 @@ export default function LiveMap() {
   const [listLoading, setListLoading] = useState(true);
   const [appReady, setAppReady] = useState(false);
 
-  // 🛰️ MODÜL BAĞLANTISI (Kilitli Sistem)
+  // 🛰️ MODÜL BAĞLANTISI (Kilitli ve Heartbeat Destekli)
   const { position, isGpsActive } = useGPS(myId, socket);
 
   const fetchHistory = async () => {
@@ -56,7 +56,7 @@ export default function LiveMap() {
 
   useEffect(() => {
     fetchHistory();
-    const timer = setTimeout(() => setAppReady(true), 2500);
+    const timer = setTimeout(() => setAppReady(true), 3000);
 
     socket.on('konumAl', (data) => {
       setLocations(prev => ({ ...prev, [data.id]: [data.lat, data.lng] }));
@@ -85,12 +85,12 @@ export default function LiveMap() {
         Toast.fire({ icon: 'success', title: 'Konum kaydedildi!' });
         fetchHistory(); 
       }
-    } catch (error) { console.error("Hata oluştu"); }
+    } catch (error) { console.error("Hata"); }
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%' }}>
-      {!appReady && <Loader message="Sistem Hazırlanıyor..." fullScreen={true} />}
+      {!appReady && <Loader message="Bağlantı Kuruluyor..." fullScreen={true} />}
 
       <div style={{ height: '60%', width: '100%', position: 'relative' }}>
         <MapContainer center={[41.0082, 28.9784]} zoom={13} style={{ height: '100%' }}>
@@ -120,9 +120,9 @@ export default function LiveMap() {
             color: 'white', border: 'none', borderRadius: '50px', 
             cursor: isGpsActive ? 'pointer' : 'not-allowed', 
             fontWeight: 'bold', boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
-            transition: 'background-color 0.4s ease'
+            transition: 'all 0.3s ease'
           }}>
-          {isGpsActive ? '💾 Konumu Kaydet' : '❌ GPS Kapalı'}
+          {isGpsActive ? '💾 Konumu Kaydet' : '❌ Sinyal Bekleniyor...'}
         </button>
       </div>
 
