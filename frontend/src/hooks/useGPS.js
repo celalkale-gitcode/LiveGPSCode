@@ -3,17 +3,18 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 export const useGPS = (myId, socket) => {
   const [position, setPosition] = useState(null);
   const [isGpsActive, setIsGpsActive] = useState(false);
-  const isQuerying = useRef(false); // 🔒 Çakışmayı önleyen kilit mekanizması
+  const lastSuccessTime = useRef(Date.now());
+  const isQuerying = useRef(false); // 🔒 Çakışma kilidi
 
   const checkLocation = useCallback(() => {
-    // Eğer halihazırda bir sorgu yapılıyorsa (cevap bekleniyorsa) yenisini başlatma
     if (isQuerying.current) return;
-
-    isQuerying.current = true; // Sorguyu kilitle
+    isQuerying.current = true;
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const coords = [pos.coords.latitude, pos.coords.longitude];
+        lastSuccessTime.current = Date.now(); // ✅ Sinyal başarılı
+        
         setIsGpsActive(true);
         setPosition(coords);
         
@@ -24,30 +25,36 @@ export const useGPS = (myId, socket) => {
             lng: pos.coords.longitude 
           });
         }
-        isQuerying.current = false; // Kilidi aç (Başarılı)
+        isQuerying.current = false;
       },
       () => {
-        setIsGpsActive(false);
-        setPosition(null);
-        isQuerying.current = false; // Kilidi aç (Hata/Kapalı)
+        // Hata gelse bile hemen kapatma, alttaki heartbeat döngüsünü bekle
+        isQuerying.current = false;
       },
       { 
         enableHighAccuracy: true, 
-        timeout: 6000, // Sorgu süresini biraz uzatarak tarayıcıya nefes aldırdık
+        timeout: 10000, // 10 saniye sabırla bekle
         maximumAge: 0  
       }
     );
   }, [myId, socket]);
 
   useEffect(() => {
-    // İlk girişte sorgula
     checkLocation();
+    const queryInterval = setInterval(checkLocation, 4000);
 
-    // 🔄 REAL-TIME DÖNGÜ: Her 4 saniyede bir durumu kontrol et
-    const interval = setInterval(checkLocation, 4000);
+    // 🕵️ HEARTBEAT: Eğer 12 saniyedir tek bir taze veri bile gelmediyse pasife çek
+    // Bu, butonun "aktif-pasif" diye yanıp sönmesini engeller.
+    const heartbeatInterval = setInterval(() => {
+      if (Date.now() - lastSuccessTime.current > 12000) {
+        setIsGpsActive(false);
+        setPosition(null);
+      }
+    }, 3000);
 
     return () => {
-      clearInterval(interval);
+      clearInterval(queryInterval);
+      clearInterval(heartbeatInterval);
       isQuerying.current = false;
     };
   }, [checkLocation]);
