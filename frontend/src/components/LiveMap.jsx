@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { io } from 'socket.io-client';
@@ -7,6 +7,7 @@ import 'leaflet/dist/leaflet.css';
 
 import LocationList from './LocationList';
 import Loader from './Loader';
+import { useGPS } from '../hooks/useGPS'; // 👈 Yazdığımız modülü buraya bağladık
 
 const customSVGIcon = L.divIcon({
   html: `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://w3.org"><path d="M12 21C16 17.5 19 14.4087 19 11.2C19 7.22355 15.866 4 12 4C8.13401 4 5 7.22355 5 11.2C5 14.4087 8 17.5 12 21Z" fill="#3B82F6" stroke="white" stroke-width="2"/><circle cx="12" cy="11" r="3" fill="white"/></svg>`,
@@ -23,148 +24,82 @@ const Toast = Swal.mixin({
   position: 'top-end',
   showConfirmButton: false,
   timer: 3000,
-  timerProgressBar: true,
 });
 
 function RecenterMap({ coords }) {
   const map = useMap();
-  useEffect(() => {
-    if (coords) map.flyTo(coords, 16);
-  }, [coords, map]);
+  useEffect(() => { if (coords) map.flyTo(coords, 16); }, [coords, map]);
   return null;
 }
 
 export default function LiveMap() {
-  const [locations, setLocations] = useState({});
   const [myId] = useState("Cihaz_" + Math.random().toString(36).substr(2, 4));
+  const [locations, setLocations] = useState({});
   const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(true); 
   const [listLoading, setListLoading] = useState(true);
-  const [myFirstCoords, setMyFirstCoords] = useState(null);
-  const [isGpsActive, setIsGpsActive] = useState(false);
+  const [appReady, setAppReady] = useState(false);
 
-  const watchIdRef = useRef(null);
-  const lastSignalRef = useRef(0);
+  // 🚀 Yeni GPS Modülünü Çalıştırıyoruz
+  const { position, isGpsActive } = useGPS(myId, socket);
 
   const fetchHistory = async () => {
     setListLoading(true);
     try {
       const res = await fetch(`${BACKEND_URL}/map/history`);
-      const data = await res.json();
-      setHistory(data);
-    } catch (err) { console.error("Geçmiş hatası:", err); } 
+      setHistory(await res.json());
+    } catch (err) { console.error(err); } 
     finally { setListLoading(false); }
   };
 
-  const startTracking = useCallback(() => {
-    if (watchIdRef.current) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-    }
-
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        lastSignalRef.current = Date.now(); // ✅ Kalp atışı güncellendi
-        setIsGpsActive(true);
-        setLoading(false);
-        
-        // 📍 KONUM AÇIK: İkonu listeye ekle
-        setLocations(prev => ({ ...prev, [myId]: [latitude, longitude] }));
-        socket.emit('konumGonder', { id: myId, lat: latitude, lng: longitude });
-        
-        if (!myFirstCoords) setMyFirstCoords([latitude, longitude]);
-      },
-      () => {
-        // 🛑 KONUM KAPALI: İkonu anında sil
-        setIsGpsActive(false);
-        setLocations(prev => {
-          const newState = { ...prev };
-          delete newState[myId];
-          return newState;
-        });
-      },
-      { 
-        enableHighAccuracy: true, 
-        timeout: 4000, 
-        maximumAge: 0 
-      }
-    );
-  }, [myId, myFirstCoords]);
-
   useEffect(() => {
     fetchHistory();
-    startTracking();
-
-    const loaderTimeout = setTimeout(() => setLoading(false), 2500);
-
-    const intervalId = setInterval(() => {
-      const now = Date.now();
-      
-      // 🕵️ AGRESİF KONTROL: Sinyal 5 saniyedir gelmiyorsa ikonu haritadan sil (Google Haritalar Mantığı)
-      if (isGpsActive && (now - lastSignalRef.current > 5000)) {
-        setIsGpsActive(false);
-        setLocations(prev => {
-          const newState = { ...prev };
-          delete newState[myId]; // 💨 İkon yok olur
-          return newState;
-        });
-      }
-
-      // GPS kapalıysa sürekli canlandırmayı dene
-      if (!isGpsActive) {
-        startTracking();
-      }
-    }, 3000);
+    setTimeout(() => setAppReady(true), 2500); // Loader süresi
 
     socket.on('konumAl', (data) => {
       setLocations(prev => ({ ...prev, [data.id]: [data.lat, data.lng] }));
     });
 
-    return () => {
-      if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
-      clearInterval(intervalId);
-      clearTimeout(loaderTimeout);
-      socket.off('konumAl');
-    };
-  }, [startTracking, isGpsActive, myId]);
+    return () => socket.off('konumAl');
+  }, []);
 
   const saveCurrentLocation = async () => {
-    if (!isGpsActive) {
-      Swal.fire({ icon: 'error', title: 'GPS Sinyali Yok', text: 'Konum kapalıyken kayıt yapılamaz.' });
-      return;
+    if (!isGpsActive || !position) {
+        Swal.fire({ icon: 'error', title: 'GPS Kapalı', text: 'Konum sinyali yokken kayıt yapılamaz.' });
+        return;
     }
-    const myPos = locations[myId];
-    if (!myPos) return;
 
     try {
       const response = await fetch(`${BACKEND_URL}/map/save`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: myId, lat: myPos[0], lng: myPos[1] }),
+        body: JSON.stringify({ id: myId, lat: position[0], lng: position[1] }),
       });
       if (response.ok) {
         Toast.fire({ icon: 'success', title: 'Konum kaydedildi!' });
         fetchHistory();
       }
-    } catch (error) { console.error("Bağlantı hatası:", error); }
+    } catch (error) { console.error("Bağlantı hatası"); }
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%' }}>
-      {loading && <Loader message="Sistem Hazırlanıyor..." fullScreen={true} />}
+      {!appReady && <Loader message="Sistem Hazırlanıyor..." fullScreen={true} />}
 
       <div style={{ height: '60%', width: '100%', position: 'relative' }}>
         <MapContainer center={[41.0082, 28.9784]} zoom={13} style={{ height: '100%' }}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          {myFirstCoords && <RecenterMap coords={myFirstCoords} />}
           
-          {Object.entries(locations).map(([id, pos]) => (
-            <Marker key={id} position={pos} icon={customSVGIcon}>
-              <Popup>
-                <strong>{id === myId ? "Siz" : id}</strong> <br />
-                📍 {pos[0].toFixed(5)}, {pos[1].toFixed(5)}
-              </Popup>
+          {position && isGpsActive && <RecenterMap coords={position} />}
+          
+          {/* 📍 SADECE GPS AKTİFSE İKONU ÇİZ (Google Haritalar Modu) */}
+          {isGpsActive && position && (
+            <Marker position={position} icon={customSVGIcon}>
+              <Popup><strong>Siz</strong> <br /> {position[0].toFixed(5)}, {position[1].toFixed(5)}</Popup>
             </Marker>
+          )}
+
+          {Object.entries(locations).map(([id, pos]) => (
+            id !== myId && <Marker key={id} position={pos} icon={customSVGIcon} />
           ))}
         </MapContainer>
         
@@ -178,7 +113,7 @@ export default function LiveMap() {
             color: 'white', border: 'none', borderRadius: '50px', 
             cursor: isGpsActive ? 'pointer' : 'not-allowed', 
             fontWeight: 'bold', boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
-            transition: 'all 0.3s ease-in-out'
+            transition: 'all 0.3s ease'
           }}>
           {isGpsActive ? '💾 Konumu Kaydet' : '❌ GPS Kapalı'}
         </button>
