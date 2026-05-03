@@ -68,16 +68,26 @@ export default function LiveMap() {
         setIsGpsActive(true);
         setLoading(false);
         
+        // 📍 KONUM AÇIK: İkonu listeye ekle
         setLocations(prev => ({ ...prev, [myId]: [latitude, longitude] }));
         socket.emit('konumGonder', { id: myId, lat: latitude, lng: longitude });
         
         if (!myFirstCoords) setMyFirstCoords([latitude, longitude]);
       },
       () => {
+        // 🛑 KONUM KAPALI: İkonu anında sil
         setIsGpsActive(false);
-        setLocations(prev => { const n = { ...prev }; delete n[myId]; return n; });
+        setLocations(prev => {
+          const newState = { ...prev };
+          delete newState[myId];
+          return newState;
+        });
       },
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      { 
+        enableHighAccuracy: true, 
+        timeout: 4000, 
+        maximumAge: 0 
+      }
     );
   }, [myId, myFirstCoords]);
 
@@ -87,17 +97,20 @@ export default function LiveMap() {
 
     const loaderTimeout = setTimeout(() => setLoading(false), 2500);
 
-    // 🔄 AGRESİF DÖNGÜ: Hem uykudan uyandırır hem de kesilen sinyali fark eder
     const intervalId = setInterval(() => {
       const now = Date.now();
       
-      // 1. KONTROL: Eğer 6 saniyedir taze veri gelmediyse GPS kapalıdır (Real-time Tepki)
-      if (isGpsActive && (now - lastSignalRef.current > 6000)) {
+      // 🕵️ AGRESİF KONTROL: Sinyal 5 saniyedir gelmiyorsa ikonu haritadan sil (Google Haritalar Mantığı)
+      if (isGpsActive && (now - lastSignalRef.current > 5000)) {
         setIsGpsActive(false);
-        setLocations(prev => { const n = { ...prev }; delete n[myId]; return n; });
+        setLocations(prev => {
+          const newState = { ...prev };
+          delete newState[myId]; // 💨 İkon yok olur
+          return newState;
+        });
       }
 
-      // 2. KONTROL: Eğer GPS pasifse tekrar uyandırmayı dene
+      // GPS kapalıysa sürekli canlandırmayı dene
       if (!isGpsActive) {
         startTracking();
       }
@@ -144,6 +157,7 @@ export default function LiveMap() {
         <MapContainer center={[41.0082, 28.9784]} zoom={13} style={{ height: '100%' }}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           {myFirstCoords && <RecenterMap coords={myFirstCoords} />}
+          
           {Object.entries(locations).map(([id, pos]) => (
             <Marker key={id} position={pos} icon={customSVGIcon}>
               <Popup>
