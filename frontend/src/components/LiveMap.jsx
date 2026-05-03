@@ -23,7 +23,7 @@ const Toast = Swal.mixin({
   toast: true,
   position: 'top-end',
   showConfirmButton: false,
-  timer: 3000,
+  timer: 2000,
 });
 
 function RecenterMap({ coords }) {
@@ -41,7 +41,7 @@ export default function LiveMap() {
   const [listLoading, setListLoading] = useState(true);
   const [appReady, setAppReady] = useState(false);
 
-  // 🛰️ MODÜL BAĞLANTISI
+  // 🛰️ MODÜL BAĞLANTISI (Kilitli Sistem)
   const { position, isGpsActive } = useGPS(myId, socket);
 
   const fetchHistory = async () => {
@@ -75,13 +75,17 @@ export default function LiveMap() {
       const response = await fetch(`${BACKEND_URL}/map/save`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: myId, lat: position[0], lng: position[1] }),
+        body: JSON.stringify({ 
+          id: myId, 
+          lat: position[0], 
+          lng: position[1] 
+        }),
       });
       if (response.ok) {
         Toast.fire({ icon: 'success', title: 'Konum kaydedildi!' });
         fetchHistory(); 
       }
-    } catch (error) { console.error("Bağlantı hatası"); }
+    } catch (error) { console.error("Hata oluştu"); }
   };
 
   return (
@@ -94,7 +98,7 @@ export default function LiveMap() {
           
           {position && isGpsActive && <RecenterMap coords={position} />}
           
-          {/* 📍 İKON SADECE GPS AKTİFSE GÖRÜNÜR (Google Maps Mantığı) */}
+          {/* 📍 İKON SADECE GPS AKTİFSE GÖRÜNÜR */}
           {isGpsActive && position && (
             <Marker position={position} icon={customSVGIcon}>
               <Popup><strong>Siz</strong> <br /> {position[0].toFixed(5)}, {position[1].toFixed(5)}</Popup>
@@ -116,7 +120,7 @@ export default function LiveMap() {
             color: 'white', border: 'none', borderRadius: '50px', 
             cursor: isGpsActive ? 'pointer' : 'not-allowed', 
             fontWeight: 'bold', boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
-            transition: 'background-color 0.3s ease'
+            transition: 'background-color 0.4s ease'
           }}>
           {isGpsActive ? '💾 Konumu Kaydet' : '❌ GPS Kapalı'}
         </button>
