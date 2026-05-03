@@ -118,21 +118,64 @@ export default function LiveMap() {
           ))}
         </MapContainer>
         
-        <button 
-          onClick={saveCurrentLocation} 
-          disabled={!isGpsActive}
-          style={{ 
-            position: 'absolute', bottom: '20px', right: '20px', zIndex: 1000, 
-            padding: '14px 24px', 
-            backgroundColor: isGpsActive ? '#3B82F6' : '#6b7280', 
-            color: 'white', border: 'none', borderRadius: '50px', 
-            cursor: isGpsActive ? 'pointer' : 'not-allowed', 
-            fontWeight: 'bold', boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
-            transition: 'all 0.3s ease',
-            opacity: isGpsActive ? 1 : 0.7
-          }}>
-          {isGpsActive ? '💾 Konumu Kaydet' : '❌ Sinyal Bekleniyor...'}
-        </button>
+ <button 
+  onClick={saveCurrentLocation} 
+  disabled={!isGpsActive}
+  style={{ 
+    position: 'absolute', bottom: '20px', right: '20px', zIndex: 1000, 
+    padding: '12px 24px', 
+    backgroundColor: isGpsActive ? '#3B82F6' : '#6b7280', 
+    color: 'white', border: 'none', borderRadius: '50px', 
+    cursor: isGpsActive ? 'pointer' : 'not-allowed', 
+    fontWeight: 'bold', 
+    boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
+    transition: 'all 0.3s ease',
+    opacity: isGpsActive ? 1 : 0.7,
+    display: 'flex',           // İkon ve yazıyı yan yana getirmek için
+    alignItems: 'center',      // Dikeyde ortalamak için
+    gap: '10px'                // İkon ile yazı arasındaki boşluk
+  }}
+>
+  {isGpsActive ? (
+    <>
+      {/* Modern Gönder (Paper Plane) İkonu */}
+      <svg 
+        width="20" 
+        height="20" 
+        viewBox="0 0 24 24" 
+        fill="none" 
+        stroke="currentColor" 
+        strokeWidth="2.5" 
+        strokeLinecap="round" 
+        strokeLinejoin="round"
+      >
+        <line x1="22" y1="2" x2="11" y2="13"></line>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+      </svg>
+      <span>Konumu Kaydet</span>
+    </>
+  ) : (
+    <>
+      {/* Sinyal Aranıyor (Yükleme/Uyarı) İkonu */}
+      <svg 
+        width="20" 
+        height="20" 
+        viewBox="0 0 24 24" 
+        fill="none" 
+        stroke="currentColor" 
+        strokeWidth="2.5" 
+        strokeLinecap="round" 
+        strokeLinejoin="round"
+      >
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+        <line x1="12" y1="9" x2="12" y2="13"></line>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      </svg>
+      <span>Sinyal Bekleniyor...</span>
+    </>
+  )}
+</button>
+
       </div>
 
       <div style={{ height: '40%', width: '100%' }}>
