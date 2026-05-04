@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+    import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { io } from 'socket.io-client';
 import Swal from 'sweetalert2'; 
 import 'leaflet/dist/leaflet.css';
+import './LiveMap.css'; // 👈 Yeni CSS dosyasını ekledik
 
 import LocationList from './LocationList';
 import Loader from './Loader';
@@ -41,7 +42,6 @@ export default function LiveMap() {
   const [listLoading, setListLoading] = useState(true);
   const [appReady, setAppReady] = useState(false);
 
-  // 🛰️ MODÜL BAĞLANTISI
   const { position, isGpsActive, checkPermissions } = useGPS(myId, socket);
 
   const fetchHistory = async () => {
@@ -67,9 +67,7 @@ export default function LiveMap() {
   }, []);
 
   const saveCurrentLocation = async () => {
-    // 🛡️ Milisaniyelik Son Kontrol
     const hasPermission = await checkPermissions();
-
     if (!hasPermission || !isGpsActive || !position) {
       Swal.fire({
         icon: 'error',
@@ -86,7 +84,7 @@ export default function LiveMap() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           id: myId, 
-          lat: position[0], // Dizi formatından koordinatı al
+          lat: position[0], 
           lng: position[1] 
         }),
       });
@@ -104,78 +102,65 @@ export default function LiveMap() {
       <div style={{ height: '60%', width: '100%', position: 'relative' }}>
         <MapContainer center={[41.0082, 28.9784]} zoom={13} style={{ height: '100%' }}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          
           {position && isGpsActive && <RecenterMap coords={position} />}
-          
           {isGpsActive && position && (
             <Marker position={position} icon={customSVGIcon}>
               <Popup><strong>Siz</strong> <br /> {position[0].toFixed(5)}, {position[1].toFixed(5)}</Popup>
             </Marker>
           )}
-
           {Object.entries(locations).map(([id, pos]) => (
             id !== myId && <Marker key={id} position={pos} icon={customSVGIcon} />
           ))}
         </MapContainer>
         
- <button 
-  onClick={saveCurrentLocation} 
-  disabled={!isGpsActive}
-  style={{ 
-    position: 'absolute', bottom: '20px', right: '20px', zIndex: 1000, 
-    padding: '12px 24px', 
-    backgroundColor: isGpsActive ? '#3B82F6' : '#6b7280', 
-    color: 'white', border: 'none', borderRadius: '50px', 
-    cursor: isGpsActive ? 'pointer' : 'not-allowed', 
-    fontWeight: 'bold', 
-    boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
-    transition: 'all 0.3s ease',
-    opacity: isGpsActive ? 1 : 0.7,
-    display: 'flex',           // İkon ve yazıyı yan yana getirmek için
-    alignItems: 'center',      // Dikeyde ortalamak için
-    gap: '10px'                // İkon ile yazı arasındaki boşluk
-  }}
->
-  {isGpsActive ? (
-    <>
-      {/* Modern Gönder (Paper Plane) İkonu */}
-      <svg 
-        width="20" 
-        height="20" 
-        viewBox="0 0 24 24" 
-        fill="none" 
-        stroke="currentColor" 
-        strokeWidth="2.5" 
-        strokeLinecap="round" 
-        strokeLinejoin="round"
-      >
-        <line x1="22" y1="2" x2="11" y2="13"></line>
-        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-      </svg>
-      <span>Konumu Kaydet</span>
-    </>
-  ) : (
-    <>
-      {/* Sinyal Aranıyor (Yükleme/Uyarı) İkonu */}
-      <svg 
-        width="20" 
-        height="20" 
-        viewBox="0 0 24 24" 
-        fill="none" 
-        stroke="currentColor" 
-        strokeWidth="2.5" 
-        strokeLinecap="round" 
-        strokeLinejoin="round"
-      >
-        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-        <line x1="12" y1="9" x2="12" y2="13"></line>
-        <line x1="12" y1="17" x2="12.01" y2="17"></line>
-      </svg>
-      <span>Sinyal Bekleniyor...</span>
-    </>
-  )}
-</button>
-
+        <button 
+          onClick={saveCurrentLocation} 
+          disabled={!isGpsActive}
+          style={{ 
+            position: 'absolute', bottom: '20px', right: '20px', zIndex: 1000, 
+            padding: '12px 24px', 
+            backgroundColor: isGpsActive ? '#3B82F6' : '#6b7280', 
+            color: 'white', border: 'none', borderRadius: '50px', 
+            cursor: isGpsActive ? 'pointer' : 'not-allowed', 
+            fontWeight: 'bold', 
+            boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
+            transition: 'all 0.3s ease',
+            opacity: isGpsActive ? 1 : 0.7,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            minWidth: '180px' // Buton genişliğinin sabit kalması için
+          }}
+        >
+          {isGpsActive ? (
+            <>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+              <span>Konumu Kaydet</span>
+            </>
+          ) : (
+            <>
+              <svg 
+                className="animate-spin-slow" // 👈 İkon dönecek
+                width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              >
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <span>Sinyal Bekleniyor</span>
+                <div className="dots-container"> {/* 👈 Animasyonlu noktalar */}
+                  <span className="dot"></span>
+                  <span className="dot"></span>
+                  <span className="dot"></span>
+                </div>
+              </div>
+            </>
+          )}
+        </button>
       </div>
 
       <div style={{ height: '40%', width: '100%' }}>
