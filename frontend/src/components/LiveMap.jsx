@@ -1,10 +1,10 @@
-    import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { io } from 'socket.io-client';
 import Swal from 'sweetalert2'; 
 import 'leaflet/dist/leaflet.css';
-import './LiveMap.css'; // 👈 Yeni CSS dosyasını ekledik
+import './LiveMap.css'; // Stil dosyamız
 
 import LocationList from './LocationList';
 import Loader from './Loader';
@@ -116,21 +116,7 @@ export default function LiveMap() {
         <button 
           onClick={saveCurrentLocation} 
           disabled={!isGpsActive}
-          style={{ 
-            position: 'absolute', bottom: '20px', right: '20px', zIndex: 1000, 
-            padding: '12px 24px', 
-            backgroundColor: isGpsActive ? '#3B82F6' : '#6b7280', 
-            color: 'white', border: 'none', borderRadius: '50px', 
-            cursor: isGpsActive ? 'pointer' : 'not-allowed', 
-            fontWeight: 'bold', 
-            boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
-            transition: 'all 0.3s ease',
-            opacity: isGpsActive ? 1 : 0.7,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            minWidth: '180px' // Buton genişliğinin sabit kalması için
-          }}
+          className={`gps-save-button ${isGpsActive ? 'active' : 'waiting'}`}
         >
           {isGpsActive ? (
             <>
@@ -142,17 +128,14 @@ export default function LiveMap() {
             </>
           ) : (
             <>
-              <svg 
-                className="animate-spin-slow" // 👈 İkon dönecek
-                width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-              >
+              <svg className="animate-spin-slow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
                 <line x1="12" y1="9" x2="12" y2="13"></line>
                 <line x1="12" y1="17" x2="12.01" y2="17"></line>
               </svg>
               <div style={{ display: 'flex', alignItems: 'center' }}>
                 <span>Sinyal Bekleniyor</span>
-                <div className="dots-container"> {/* 👈 Animasyonlu noktalar */}
+                <div className="dots-container">
                   <span className="dot"></span>
                   <span className="dot"></span>
                   <span className="dot"></span>
